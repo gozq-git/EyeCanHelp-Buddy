@@ -1,1 +1,1 @@
-# EyeCanHelp-Buddy
+# EyeCanHelp Buddy
