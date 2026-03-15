@@ -48,15 +48,15 @@ jobs:
           ls -lah
 
       - name: Run Snyk to check for vulnerabilities (SCA)
-        uses: snyk/actions/node@master
+        uses: snyk/actions/python@master
         continue-on-error: true
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
-            command: test
+            command: test --file=requirements.txt --package-manager=pip
 
       - name: Run Snyk to check for vulnerabilities (SAST)
-        uses: snyk/actions/node@master
+        uses: snyk/actions/python@master
         continue-on-error: true
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
