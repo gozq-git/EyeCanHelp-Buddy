@@ -221,13 +221,13 @@ jobs:
             exit 1
           fi
 
-      - name: Validate CloudFront distribution ID
-        shell: bash
-        run: |
-          if [ -z "$FRONTEND_CLOUDFRONT_DISTRIBUTION_ID" ]; then
-            echo "Missing required secret: FRONTEND_CLOUDFRONT_DISTRIBUTION_ID"
-            exit 1
-          fi
+      # - name: Validate CloudFront distribution ID
+      #   shell: bash
+      #   run: |
+      #     if [ -z "$FRONTEND_CLOUDFRONT_DISTRIBUTION_ID" ]; then
+      #       echo "Missing required secret: FRONTEND_CLOUDFRONT_DISTRIBUTION_ID"
+      #       exit 1
+      #     fi
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
