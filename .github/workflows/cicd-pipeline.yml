@@ -140,3 +140,125 @@ jobs:
             -t "$IMAGE_URI:latest" \
             --push \
             ./backend
+
+  build-and-push-backend:
+    name: Build & Publish Backend Image to ECR
+    needs: snyk-scan-BE
+    runs-on: ubuntu-latest
+    env:
+      AWS_REGION: ap-southeast-1
+      AWS_ACCOUNT_ID: 580291028795
+      ECR_REPOSITORY: eyecanhelpbuddy/backend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate required secrets
+        shell: bash
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        run: |
+          if [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ]; then
+            echo "Missing required secrets: AWS_ACCESS_KEY_ID and/or AWS_SECRET_ACCESS_KEY"
+            exit 1
+          fi
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push backend Docker image
+        shell: bash
+        env:
+          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          IMAGE_URI="$REGISTRY/$ECR_REPOSITORY"
+          docker buildx build \
+            --platform linux/arm64 \
+            -f backend/Dockerfile \
+            -t "$IMAGE_URI:$IMAGE_TAG" \
+            -t "$IMAGE_URI:latest" \
+            --push \
+            backend
+
+  build-and-deploy-frontend-s3:
+    name: Build Frontend and Deploy to S3
+    needs: build-and-push-backend
+    runs-on: ubuntu-latest
+    env:
+      AWS_REGION: ap-southeast-1
+      FRONTEND_S3_BUCKET: eyecanhelpbuddy-580291028795-ap-southeast-1-an/frontend
+      # FRONTEND_CLOUDFRONT_DISTRIBUTION_ID: ${{ secrets.FRONTEND_CLOUDFRONT_DISTRIBUTION_ID }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate required secrets
+        shell: bash
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        run: |
+          if [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ]; then
+            echo "Missing required secrets: AWS_ACCESS_KEY_ID and/or AWS_SECRET_ACCESS_KEY"
+            exit 1
+          fi
+
+      - name: Validate CloudFront distribution ID
+        shell: bash
+        run: |
+          if [ -z "$FRONTEND_CLOUDFRONT_DISTRIBUTION_ID" ]; then
+            echo "Missing required secret: FRONTEND_CLOUDFRONT_DISTRIBUTION_ID"
+            exit 1
+          fi
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Sync frontend dist to S3
+        shell: bash
+        run: |
+          aws s3 sync frontend/dist "s3://$FRONTEND_S3_BUCKET" --delete
+
+      # - name: Invalidate CloudFront cache
+      #   shell: bash
+      #   run: |
+      #     aws cloudfront create-invalidation \
+      #       --distribution-id "$FRONTEND_CLOUDFRONT_DISTRIBUTION_ID" \
+      #       --paths "/*"
