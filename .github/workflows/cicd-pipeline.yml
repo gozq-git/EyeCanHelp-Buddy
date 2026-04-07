@@ -149,6 +149,7 @@ jobs:
       AWS_REGION: ap-southeast-1
       AWS_ACCOUNT_ID: 580291028795
       ECR_REPOSITORY: eyecanhelpbuddy/backend
+      BACKEND_ENV_FILE: ${{ secrets.BACKEND_ENV_FILE }}
 
     steps:
       - name: Checkout
@@ -162,6 +163,14 @@ jobs:
         run: |
           if [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ]; then
             echo "Missing required secrets: AWS_ACCESS_KEY_ID and/or AWS_SECRET_ACCESS_KEY"
+            exit 1
+          fi
+
+      - name: Validate backend env file secret
+        shell: bash
+        run: |
+          if [ -z "$BACKEND_ENV_FILE" ]; then
+            echo "Missing required secret: BACKEND_ENV_FILE"
             exit 1
           fi
 
@@ -181,6 +190,11 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+
+      - name: Create backend env file
+        shell: bash
+        run: |
+          printf '%s' "$BACKEND_ENV_FILE" > backend/.env
 
       - name: Build and push backend Docker image
         shell: bash
@@ -204,7 +218,8 @@ jobs:
     env:
       AWS_REGION: ap-southeast-1
       FRONTEND_S3_BUCKET: eyecanhelpbuddy-580291028795-ap-southeast-1-an/frontend
-      # FRONTEND_CLOUDFRONT_DISTRIBUTION_ID: ${{ secrets.FRONTEND_CLOUDFRONT_DISTRIBUTION_ID }}
+      FRONTEND_CLOUDFRONT_DISTRIBUTION_ID: ${{ secrets.FRONTEND_CLOUDFRONT_DISTRIBUTION_ID }}
+      FRONTEND_ENV_FILE: ${{ secrets.FRONTEND_ENV_FILE }}
 
     steps:
       - name: Checkout
@@ -221,13 +236,21 @@ jobs:
             exit 1
           fi
 
-      # - name: Validate CloudFront distribution ID
-      #   shell: bash
-      #   run: |
-      #     if [ -z "$FRONTEND_CLOUDFRONT_DISTRIBUTION_ID" ]; then
-      #       echo "Missing required secret: FRONTEND_CLOUDFRONT_DISTRIBUTION_ID"
-      #       exit 1
-      #     fi
+      - name: Validate CloudFront distribution ID
+        shell: bash
+        run: |
+          if [ -z "$FRONTEND_CLOUDFRONT_DISTRIBUTION_ID" ]; then
+            echo "Missing required secret: FRONTEND_CLOUDFRONT_DISTRIBUTION_ID"
+            exit 1
+          fi
+
+      - name: Validate frontend env file secret
+        shell: bash
+        run: |
+          if [ -z "$FRONTEND_ENV_FILE" ]; then
+            echo "Missing required secret: FRONTEND_ENV_FILE"
+            exit 1
+          fi
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -239,6 +262,11 @@ jobs:
       - name: Install frontend dependencies
         working-directory: frontend
         run: npm ci
+
+      - name: Create frontend env file
+        shell: bash
+        run: |
+          printf '%s' "$FRONTEND_ENV_FILE" > frontend/.env.production
 
       - name: Build frontend
         working-directory: frontend
@@ -256,9 +284,9 @@ jobs:
         run: |
           aws s3 sync frontend/dist "s3://$FRONTEND_S3_BUCKET" --delete
 
-      # - name: Invalidate CloudFront cache
-      #   shell: bash
-      #   run: |
-      #     aws cloudfront create-invalidation \
-      #       --distribution-id "$FRONTEND_CLOUDFRONT_DISTRIBUTION_ID" \
-      #       --paths "/*"
+      - name: Invalidate CloudFront cache
+        shell: bash
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id "$FRONTEND_CLOUDFRONT_DISTRIBUTION_ID" \
+            --paths "/*"
