@@ -111,9 +111,9 @@ async def chat(messages: list[dict]) -> str:
     prompt = _build_prompt(messages)
 
     text = await _invoke_with_runtime_arn(prompt)
-    if not text:
-        text = await _invoke_with_http_endpoint(prompt)
+    # if not text:
+    #     text = await _invoke_with_http_endpoint(prompt)
 
-    if not text:
-        return "No response returned from coordinator runtime."
+    # if not text:
+    #     return "No response returned from coordinator runtime."
     return text
