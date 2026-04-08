@@ -1,0 +1,132 @@
+name: Backend Build and Push to ECR
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - backend/**
+      - .github/workflows/backend-cicd.yml
+    paths-ignore:
+      - backend/agents/**
+
+permissions:
+  contents: read
+
+jobs:
+  sonarqube-scan:
+    name: SonarQube Scan (unit test & code_quality)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: SonarQube Scan
+        uses: SonarSource/sonarqube-scan-action@v5
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+  snyk-scan-BE:
+    name: Snyk Scan BE (SCA & SAST)
+    needs: sonarqube-scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@master
+        with:
+          sparse-checkout: 'backend'
+          sparse-checkout-cone-mode: false
+
+      - name: Move files to root
+        run: |
+          ls -lah
+          shopt -s dotglob
+          mv backend/* .
+          rm -rf backend
+          ls -lah
+
+      - name: Run Snyk to check for vulnerabilities (SCA)
+        uses: snyk/actions/python@master
+        continue-on-error: true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          command: test --file=requirements.txt --package-manager=pip
+
+      - name: Run Snyk to check for vulnerabilities (SAST)
+        uses: snyk/actions/python@master
+        continue-on-error: true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          command: code test
+
+  build-and-push-backend:
+    name: Build & Publish Backend Image to ECR
+    needs: snyk-scan-BE
+    runs-on: ubuntu-latest
+    env:
+      AWS_REGION: ap-southeast-1
+      AWS_ACCOUNT_ID: 580291028795
+      ECR_REPOSITORY: eyecanhelpbuddy/backend
+      BACKEND_ENV_FILE: ${{ secrets.BACKEND_ENV_FILE }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate required secrets
+        shell: bash
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        run: |
+          if [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ]; then
+            echo "Missing required secrets: AWS_ACCESS_KEY_ID and/or AWS_SECRET_ACCESS_KEY"
+            exit 1
+          fi
+
+      - name: Validate backend env file secret
+        shell: bash
+        run: |
+          if [ -z "$BACKEND_ENV_FILE" ]; then
+            echo "Missing required secret: BACKEND_ENV_FILE"
+            exit 1
+          fi
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Create backend env file
+        shell: bash
+        run: |
+          printf '%s' "$BACKEND_ENV_FILE" > backend/.env
+
+      - name: Build and push backend Docker image
+        shell: bash
+        env:
+          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          IMAGE_URI="$REGISTRY/$ECR_REPOSITORY"
+          docker buildx build \
+            --platform linux/arm64 \
+            -f backend/Dockerfile \
+            -t "$IMAGE_URI:$IMAGE_TAG" \
+            -t "$IMAGE_URI:latest" \
+            --push \
+            backend
