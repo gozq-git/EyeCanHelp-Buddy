@@ -1,6 +1,7 @@
 name: Backend Build and Push to ECR
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
