@@ -21,10 +21,10 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="EyeCanHelp Buddy Backend", lifespan=lifespan)
 
-app.include_router(epic.router)
-app.include_router(acknowledgement.router)
-app.include_router(symptom.router)
-app.include_router(chatbot.router)
+app.include_router(epic.router, prefix="/api")
+app.include_router(acknowledgement.router, prefix="/api")
+app.include_router(symptom.router, prefix="/api")
+app.include_router(chatbot.router, prefix="/api")
 
 
 @app.get("/")
