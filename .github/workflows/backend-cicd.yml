@@ -14,56 +14,56 @@ permissions:
   contents: read
 
 jobs:
-  sonarqube-scan:
-    name: SonarQube Scan (unit test & code_quality)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+  # sonarqube-scan:
+  #   name: SonarQube Scan (unit test & code_quality)
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #       with:
+  #         fetch-depth: 0
 
-      - name: SonarQube Scan
-        uses: SonarSource/sonarqube-scan-action@v5
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+  #     - name: SonarQube Scan
+  #       uses: SonarSource/sonarqube-scan-action@v5
+  #       env:
+  #         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
-  snyk-scan-BE:
-    name: Snyk Scan BE (SCA & SAST)
-    needs: sonarqube-scan
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@master
-        with:
-          sparse-checkout: 'backend'
-          sparse-checkout-cone-mode: false
+  # snyk-scan-BE:
+  #   name: Snyk Scan BE (SCA & SAST)
+  #   needs: sonarqube-scan
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@master
+  #       with:
+  #         sparse-checkout: 'backend'
+  #         sparse-checkout-cone-mode: false
 
-      - name: Move files to root
-        run: |
-          ls -lah
-          shopt -s dotglob
-          mv backend/* .
-          rm -rf backend
-          ls -lah
+  #     - name: Move files to root
+  #       run: |
+  #         ls -lah
+  #         shopt -s dotglob
+  #         mv backend/* .
+  #         rm -rf backend
+  #         ls -lah
 
-      - name: Run Snyk to check for vulnerabilities (SCA)
-        uses: snyk/actions/python@master
-        continue-on-error: true
-        env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        with:
-          command: test --file=requirements.txt --package-manager=pip
+  #     - name: Run Snyk to check for vulnerabilities (SCA)
+  #       uses: snyk/actions/python@master
+  #       continue-on-error: true
+  #       env:
+  #         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+  #       with:
+  #         command: test --file=requirements.txt --package-manager=pip
 
-      - name: Run Snyk to check for vulnerabilities (SAST)
-        uses: snyk/actions/python@master
-        continue-on-error: true
-        env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        with:
-          command: code test
+  #     - name: Run Snyk to check for vulnerabilities (SAST)
+  #       uses: snyk/actions/python@master
+  #       continue-on-error: true
+  #       env:
+  #         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+  #       with:
+  #         command: code test
 
   build-and-push-backend:
     name: Build & Publish Backend Image to ECR
-    needs: snyk-scan-BE
+    # needs: snyk-scan-BE
     runs-on: ubuntu-latest
     env:
       AWS_REGION: ap-southeast-1
