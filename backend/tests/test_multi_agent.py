@@ -99,6 +99,12 @@ def test_multi_agent(
         "Coordinator (healthcare query)",
         "I have a fever for two days and sore throat, what next steps should I take?",
     )
+    test_runtime(
+        client,
+        coordinator_arn,
+        "Coordinator (medical knowledge base query)",
+        "Find relevant information about managing hypertension in adults.",
+    )
 
     if financial_arn:
         test_runtime(
