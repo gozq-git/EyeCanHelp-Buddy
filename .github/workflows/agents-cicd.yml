@@ -23,12 +23,12 @@ jobs:
           - name: coordinator
             dockerfile: backend/agents/coordinator/Dockerfile
             ecr_repository: eyecanhelpbuddy/agent-coordinator
-          - name: financial
-            dockerfile: backend/agents/financial/Dockerfile
-            ecr_repository: eyecanhelpbuddy/agent-financial
-          - name: healthcare
-            dockerfile: backend/agents/healthcare/Dockerfile
-            ecr_repository: eyecanhelpbuddy/agent-healthcare
+          # - name: financial
+          #   dockerfile: backend/agents/financial/Dockerfile
+          #   ecr_repository: eyecanhelpbuddy/agent-financial
+          # - name: healthcare
+          #   dockerfile: backend/agents/healthcare/Dockerfile
+          #   ecr_repository: eyecanhelpbuddy/agent-healthcare
     env:
       AWS_REGION: ap-southeast-1
       AWS_ACCOUNT_ID: 580291028795
