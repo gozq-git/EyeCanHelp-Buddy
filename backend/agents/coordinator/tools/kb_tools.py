@@ -21,12 +21,12 @@ def get_kb_tools() -> List[Any]:
         if not kb_id:
             return [{"error": "AWS_KNOWLEDGE_BASE_ID is not configured."}]
 
-        region = os.getenv("AWS_REGION") or os.getenv("AWS_DEFAULT_REGION") or "us-east-1"
+        region = os.getenv("AWS_KB_REGION")
         num_results = min(max(max_results, 1), 10)
 
         try:
             logger.info("Searching medical KB for query: %s", cleaned_query)
-            bedrock_agent_runtime = boto3.client("bedrock-agent-runtime", region_name=region)
+            bedrock_agent_runtime = boto3.client("bedrock-agent-runtime", region_name=kb_region)
             response = bedrock_agent_runtime.retrieve(
                 knowledgeBaseId=kb_id,
                 retrievalQuery={"text": cleaned_query},
