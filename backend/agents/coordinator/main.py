@@ -1,7 +1,11 @@
 from bedrock_agentcore import BedrockAgentCoreApp
+from dotenv import load_dotenv
 
 from agent import create_agent
 from subagent_router import SubAgentRouter
+
+
+load_dotenv()
 
 
 app = BedrockAgentCoreApp()
