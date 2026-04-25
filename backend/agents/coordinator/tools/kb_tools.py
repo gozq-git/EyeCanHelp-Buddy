@@ -26,7 +26,7 @@ def get_kb_tools() -> List[Any]:
 
         try:
             logger.info("Searching medical KB for query: %s", cleaned_query)
-            bedrock_agent_runtime = boto3.client("bedrock-agent-runtime", region_name=kb_region)
+            bedrock_agent_runtime = boto3.client("bedrock-agent-runtime", region_name=region)
             response = bedrock_agent_runtime.retrieve(
                 knowledgeBaseId=kb_id,
                 retrievalQuery={"text": cleaned_query},
