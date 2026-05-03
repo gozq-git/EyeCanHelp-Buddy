@@ -11,6 +11,7 @@ export default defineConfig(() => {
       proxy: {
         '/api': {
           target: apiProxyTarget,
+          rewrite: (path) => path.replace(/^\/api/, ''),
         },
       },
     },
