@@ -19,3 +19,6 @@ export const assessSymptoms = (patientId, symptomDescription) =>
 
 export const sendChatMessage = (messages) =>
   api.post('/chat', { messages })
+
+export const simulateSingpassLogin = () =>
+  Promise.resolve({ data: { patient_id: 'P001', patient_name: 'Test Patient' } })
