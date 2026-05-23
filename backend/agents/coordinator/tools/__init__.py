@@ -1,4 +1,3 @@
-from .routing_tools import get_routing_tools
-from .kb_tools import get_kb_tools
+from .kb_tools import format_kb_response, search_medical_kb
 
-__all__ = ["get_routing_tools", "get_kb_tools"]
+__all__ = ["search_medical_kb", "format_kb_response"]
