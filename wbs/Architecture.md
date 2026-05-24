@@ -57,26 +57,29 @@ The backend also includes a multi-agent system (AWS Bedrock AgentCore) with a co
 
   ─ ─ ─ ─ ─ ─ ─ ─ ─  Separate System (AWS Bedrock AgentCore)  ─ ─ ─ ─ ─ ─
 
-                    ┌───────────────────────────────────────────────────┐
-                    │          Coordinator Agent  (port 8080)           │
-                    │   Entry point · search_medical_kb(query) via      │
-                    │   bedrock-agent-runtime.retrieve(KB_ID)           │
-                    └──────────────┬────────────────────────────────────┘
-                                   │  RAG against AWS Knowledge Base
-                                   ▼
-                    ┌───────────────────────────────────────────────────┐
-                    │     AWS Knowledge Base  (TTSH Library docs)       │
-                    │     AWS_KNOWLEDGE_BASE_ID · AWS_KB_REGION         │
-                    └───────────────────────────────────────────────────┘
-
-           Scaffolded (built + dockerised) but not wired into agent.py today:
-           ┌────────────────────┐    ┌────────────────────────┐
-           │  Financial Agent   │    │  Healthcare Agent      │
-           │  (port 8080)       │    │  (port 8080)           │
-           │  Budgeting, debt,  │    │  Symptom guidance,     │
-           │  savings, tax,     │    │  medication education, │
-           │  insurance         │    │  preventive care       │
-           └────────────────────┘    └────────────────────────┘
+                    ┌──────────────────────────────────────────────────────────┐
+                    │            Coordinator Agent  (port 8080)                │
+                    │                                                          │
+                    │   LangGraph StateGraph (in-process — no cross-runtime)   │
+                    │                                                          │
+                    │   ┌────────────────────────────────────────────────┐     │
+                    │   │  llm_triage  (Bedrock converse — TRIAGE_PROMPT)│     │
+                    │   └─────────┬───────────────┬───────────────┬──────┘     │
+                    │             │               │               │            │
+                    │      ┌──────▼──────┐ ┌──────▼───────┐ ┌─────▼──────┐     │
+                    │      │  financial  │ │  healthcare  │ │  generic   │     │
+                    │      │  Bedrock    │ │  KB RAG only │ │  Bedrock   │     │
+                    │      │  converse   │ │  (no model)  │ │  converse  │     │
+                    │      └──────┬──────┘ └──────┬───────┘ └─────┬──────┘     │
+                    │             └───────────────┴───────────────┘            │
+                    │                             │  END                       │
+                    └─────────────────────────────┼────────────────────────────┘
+                                                  │  KB lookups only
+                                                  ▼
+                    ┌──────────────────────────────────────────────────────────┐
+                    │       AWS Knowledge Base  (TTSH Library docs)            │
+                    │       AWS_KNOWLEDGE_BASE_ID · AWS_KB_REGION              │
+                    └──────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -152,25 +155,13 @@ EyeCanHelp-Buddy/
 │   │   ├── symptom_service.py         # Keyword-based triage (MILD/SEVERE/UNCLEAR)
 │   │   └── llm_service.py             # AWS Bedrock AgentCore invoke client
 │   ├── agents/                        # AWS Bedrock AgentCore multi-agent system
-│   │   ├── coordinator/               # Orchestrator agent (currently KB-RAG only)
-│   │   │   ├── main.py               # AgentCore entrypoint (port 8080)
-│   │   │   ├── agent.py              # Coordinator: uses get_kb_tools()
-│   │   │   ├── subagent_router.py    # Invokes specialist runtimes via ARN (scaffolded)
-│   │   │   ├── tools/
-│   │   │   │   ├── kb_tools.py       # search_medical_kb — RAG against AWS Knowledge Base
-│   │   │   │   └── routing_tools.py  # call_financial_agent, call_healthcare_agent (defined but not wired in agent.py)
-│   │   │   ├── Dockerfile
-│   │   │   └── requirements.txt      # boto3, bedrock-agentcore, strands-agents
-│   │   ├── financial/                 # Financial specialist runtime
-│   │   │   ├── main.py
-│   │   │   ├── agent.py              # Budgeting, debt, savings, tax, insurance
-│   │   │   ├── Dockerfile
-│   │   │   └── requirements.txt      # bedrock-agentcore, strands-agents
-│   │   └── healthcare/                # Healthcare specialist runtime
-│   │       ├── main.py
-│   │       ├── agent.py              # Symptom guidance, medication education
+│   │   └── coordinator/               # Single in-process orchestrator (port 8080)
+│   │       ├── main.py               # AgentCore entrypoint — invokes the workflow
+│   │       ├── agent.py              # LangGraph StateGraph: triage → financial / healthcare / generic node
+│   │       ├── tools/
+│   │       │   └── kb_tools.py       # search_medical_kb + format_kb_response (AWS KB RAG)
 │   │       ├── Dockerfile
-│   │       └── requirements.txt      # bedrock-agentcore, strands-agents
+│   │       └── requirements.txt      # boto3, bedrock-agentcore, python-dotenv, langgraph
 │   ├── scripts/
 │   │   └── db/                          # Standalone DB-init scripts for prod deploys
 │   │       ├── 01_postgres_schema.sql         # DDL (idempotent) — always run
@@ -417,20 +408,45 @@ General Enquiry text  →  POST /chat  →  llm_service.py
               runtimeSessionId = AGENTCORE_RUNTIME_SESSION_ID or uuid4(),
               payload = JSON({ "prompt": transcript })
          )
-  → Coordinator Agent (currently wired with KB tool only):
-         search_medical_kb(query)  →  bedrock-agent-runtime.retrieve(
-                                          knowledgeBaseId = AWS_KNOWLEDGE_BASE_ID,
-                                          region          = AWS_KB_REGION or AWS_REGION)
-                                   →  returns ranked excerpts from the TTSH Library
-         Coordinator answers from KB excerpts; tells user when content is not in the KB.
-  → Response extracted from SSE stream / JSON body
-  → reply string returned to POST /chat caller → appended as bot bubble
 
-Scaffolded but NOT currently wired into the coordinator agent (still buildable / deployable):
-  - subagent_router.py + tools/routing_tools.py: call_financial_agent / call_healthcare_agent
-  - Financial Agent runtime  (FINANCIAL_AGENT_RUNTIME_ARN)   — budgeting, Medisave, insurance
-  - Healthcare Agent runtime (HEALTHCARE_AGENT_RUNTIME_ARN)  — IVT Q&A, medication, symptoms
-  To enable, add `get_routing_tools(router)` to the tools list in coordinator/agent.py.
+  → Coordinator runtime invokes a LangGraph StateGraph (compiled once at startup):
+
+       1. llm_triage  (entry node)
+          Reads the latest USER: ... line from the transcript and asks
+          Bedrock converse(modelId=BEDROCK_MODEL_ID) with TRIAGE_SYSTEM_PROMPT
+          to classify the query into one of three labels:
+            • "financial"   — payment / Medisave / costs
+            • "healthcare"  — symptoms, conditions, treatment, medication
+            • "generic"     — everything else (default if unclear)
+          Stores { route, kb_query } on CoordinatorState.
+
+       2. Conditional edge routes to one of three terminal nodes:
+
+          financial_node   → Bedrock converse(FINANCIAL_SYSTEM_PROMPT, kb_query)
+                             → assistant-written, conservative financial guidance.
+
+          healthcare_node  → search_medical_kb(kb_query) hits
+                             bedrock-agent-runtime.retrieve(AWS_KNOWLEDGE_BASE_ID,
+                             AWS_KB_REGION) → format_kb_response() picks top-3
+                             snippets. No model call — pure RAG from TTSH Library.
+                             Returns "No information available." when the KB is
+                             empty / errored / has no relevant matches.
+
+          generic_node     → Bedrock converse(GENERIC_SYSTEM_PROMPT, kb_query).
+                             Concise general-purpose response; redirects clearly
+                             financial / healthcare follow-ups.
+
+       3. All three nodes write their text into state["response"] and go to END.
+
+  → main.py's @app.entrypoint reads response["response"] → returns
+    { status, agent: "coordinator", response: text }
+  → llm_service.py extracts that and returns reply string to POST /chat caller
+    → appended as bot bubble in the chat thread.
+
+Bedrock model defaults (overridable via env):
+  - BEDROCK_MODEL_ID       = "global.anthropic.claude-sonnet-4-5-20250929-v1:0"
+  - BEDROCK_TEMPERATURE    = 0.2
+  - AWS_REGION (or _DEFAULT) determines the bedrock-runtime endpoint.
 ```
 
 ---
@@ -510,7 +526,7 @@ All Pydantic schemas carry a `resourceType` field matching FHIR R4 resource name
 | ORM | SQLAlchemy 2 (async) | PostgreSQL async via asyncpg |
 | MongoDB driver | Motor (async) | Non-blocking document storage |
 | LLM | AWS Bedrock AgentCore | Coordinator routes to Financial / Healthcare agents; `anthropic==0.49.0` installed but not imported |
-| Multi-agent | AWS Bedrock AgentCore + Strands | Coordinator + Financial + Healthcare runtimes |
+| Multi-agent | AWS Bedrock AgentCore + LangGraph | Single coordinator runtime; LangGraph StateGraph routes in-process to financial / healthcare / generic nodes (no cross-runtime ARN calls) |
 | AWS SDK | boto3 1.39.0 | Bedrock runtime invocation |
 | Containerization | Docker | One Dockerfile per agent runtime |
 | CI/CD | GitHub Actions → AWS ECR | Automated build + push |
@@ -532,10 +548,10 @@ All Pydantic schemas carry a `resourceType` field matching FHIR R4 resource name
 | `AGENTCORE_COORDINATOR_ENDPOINT` | `llm_service.py` | Endpoint URL for coordinator runtime invocation |
 | `AGENTCORE_TIMEOUT_SECONDS` | `llm_service.py` | HTTP timeout for AgentCore calls (default: `30`) |
 | `AGENTCORE_RUNTIME_SESSION_ID` | `llm_service.py` | Optional fixed session ID; auto-generated (uuid4) if unset |
-| `AWS_KNOWLEDGE_BASE_ID` | Coordinator agent | Knowledge Base ID used by `search_medical_kb` tool (required for KB lookups) |
+| `AWS_KNOWLEDGE_BASE_ID` | Coordinator agent | Knowledge Base ID used by `search_medical_kb` (required for the healthcare node) |
 | `AWS_KB_REGION` | Coordinator agent | Region for KB queries (optional; defaults to `AWS_REGION`) |
-| `FINANCIAL_AGENT_RUNTIME_ARN` | Coordinator agent (scaffolded) | ARN of financial specialist runtime — only used if routing tools are wired in |
-| `HEALTHCARE_AGENT_RUNTIME_ARN` | Coordinator agent (scaffolded) | ARN of healthcare specialist runtime — only used if routing tools are wired in |
+| `BEDROCK_MODEL_ID` | Coordinator agent | Bedrock model id used by triage / financial / generic nodes via `converse`. Default: `global.anthropic.claude-sonnet-4-5-20250929-v1:0` |
+| `BEDROCK_TEMPERATURE` | Coordinator agent | Inference temperature for `converse` (default: `0.2`) |
 
 ---
 
@@ -684,15 +700,15 @@ Notes:
 
 ---
 
-### Multi-Agent Runtimes (AWS Bedrock AgentCore)
-```bash
-# Build Docker images from repo root
-docker build -t eyecanhelp-coordinator:local -f backend/agents/coordinator/Dockerfile ./backend
-docker build -t eyecanhelp-financial:local   -f backend/agents/financial/Dockerfile   ./backend
-docker build -t eyecanhelp-healthcare:local  -f backend/agents/healthcare/Dockerfile  ./backend
+### Coordinator Runtime (AWS Bedrock AgentCore)
 
-# Or run locally (from backend/)
+Only one runtime now — financial / healthcare / generic routing happens inside
+the coordinator via LangGraph nodes rather than across separate runtimes.
+
+```bash
+# Build the Docker image from repo root
+docker build -t eyecanhelp-coordinator:local -f backend/agents/coordinator/Dockerfile ./backend
+
+# Or run locally (from backend/) — port 8080
 python agents/coordinator/main.py
-python agents/financial/main.py
-python agents/healthcare/main.py
 ```
