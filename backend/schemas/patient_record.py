@@ -20,4 +20,5 @@ class PatientRecordCreate(BaseModel):
 class PatientRecordResponse(PatientRecordCreate):
     resourceType: str = "DiagnosticReport"
     record_id: str
+    record_medication: str | None = None
     issued: datetime = Field(default_factory=datetime.utcnow)

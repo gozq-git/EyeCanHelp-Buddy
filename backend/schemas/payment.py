@@ -10,6 +10,6 @@ class PaymentSchema(BaseModel):
     payment_diagnosis: str                     # ICD-10 code
     payment_maxMedisave: float                 # SGD
     payment_estCostPerInjection: float         # SGD
-    payment_mode: Literal["Medisave", "Cash", "MediShield", "CHAS"]
+    payment_mode: Literal["Medisave", "NOK Medisave", "Cash", "MediShield", "CHAS"]
 
     model_config = {"from_attributes": True}

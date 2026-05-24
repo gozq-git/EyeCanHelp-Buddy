@@ -9,6 +9,7 @@ from database.mongo import get_mongo_db
 from schemas.patient_record import PatientRecordCreate, PatientRecordResponse
 from schemas.payment import PaymentSchema
 from services.acknowledgement_service import save_patient_acknowledgement, save_payment
+from bson import ObjectId
 
 router = APIRouter(prefix="/acknowledgement", tags=["Acknowledgement"])
 
@@ -22,6 +23,19 @@ class AcknowledgementResponse(BaseModel):
     record: PatientRecordResponse
     payment: PaymentSchema
     message: str
+
+
+@router.get("/latest/{patient_id}")
+async def get_latest_acknowledgement(patient_id: str):
+    mongo_db = get_mongo_db()
+    doc = await mongo_db["TBL_PATIENT_RECORDS"].find_one(
+        {"patient_id": patient_id},
+        sort=[("issued", -1)],
+    )
+    if not doc:
+        raise HTTPException(status_code=404, detail="No record found for patient")
+    doc.pop("_id", None)
+    return doc
 
 
 @router.post("", response_model=AcknowledgementResponse)

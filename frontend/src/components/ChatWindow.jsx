@@ -1,35 +1,42 @@
 import React, { useState, useRef, useEffect } from 'react'
 import MessageBubble from './MessageBubble'
 import EyeLogoSVG from './EyeLogoSVG'
-import { sendChatMessage, submitAcknowledgement } from '../api/client'
+import { sendChatMessage, submitAcknowledgement, getEpicRecord, getPatient, createPatient, getLatestAcknowledgement } from '../api/client'
 
 let _msgId = 1
 const nextId = () => ++_msgId
 
-const INIT_FORM = { last3mths_admission: false, stroke_heartAtt_last6mths: false, record_eyes: 'OD' }
+const INIT_FORM = { last3mths_admission: false, stroke_heartAtt_last6mths: false, record_eyes: 'OD', payment_mode: 'Medisave' }
 const INIT_MESSAGES = [{ id: 1, role: 'bot', type: 'welcome', content: '' }]
 
-function buildPayload(answers) {
+// Total cost shown to the patient before payment-mode selection. Mirrors the default
+// in FinancialCounsellingDoc and the payment.payment_estCostPerInjection used by buildPayload.
+const PROCEDURE_COST = 123
+
+function buildPayload(answers, epicRecord) {
+  const patientId = epicRecord?.patient_id || 'UNKNOWN'
+  const patientName = epicRecord?.record_name || 'Unknown Patient'
+  const diagnosis = epicRecord?.record_diagnosis || 'H35.31'
   return {
     patient_record: {
-      patient_id: 'P001',
-      record_name: 'Test Patient',
-      record_diagnosis: 'H35.31',
+      patient_id: patientId,
+      record_name: patientName,
+      record_diagnosis: diagnosis,
       record_eyes: answers.record_eyes,
-      record_number_of_injections: 1,
+      record_number_of_injections: epicRecord?.record_number_of_injections || 1,
       record_validity_of_consent: true,
       record_last3mths_admission: answers.last3mths_admission,
       record_stroke_heartAtt_last6mths: answers.stroke_heartAtt_last6mths,
-      record_taking_antibiotics: false,
-      record_pregnant: false,
+      record_taking_antibiotics: epicRecord?.record_taking_antibiotics || false,
+      record_pregnant: epicRecord?.record_pregnant || false,
     },
     payment: {
-      payment_id: 'PAY001',
-      payment_name: 'Test Patient',
-      payment_diagnosis: 'H35.31',
-      payment_maxMedisave: 1200,
+      payment_id: `PAY-${patientId}-${Date.now()}`,
+      payment_name: patientName,
+      payment_diagnosis: diagnosis,
+      payment_maxMedisave: 2150,
       payment_estCostPerInjection: 123,
-      payment_mode: 'Medisave',
+      payment_mode: answers.payment_mode || 'Medisave',
     },
   }
 }
@@ -58,6 +65,10 @@ export default function ChatWindow() {
   const [preProcStep, setPreProcStep] = useState('login')
   const [postOpStep, setPostOpStep] = useState('login')
   const [formAnswers, setFormAnswers] = useState(INIT_FORM)
+  const [epicRecord, setEpicRecord] = useState(null)
+  const [currentPatientId, setCurrentPatientId] = useState(null)
+  const [regStep, setRegStep] = useState(null)   // 'name' | 'dob' | 'phone'
+  const [regData, setRegData] = useState({ patient_id: '', patient_name: '', patient_dob: '', phone_number: '' })
   const [messages, setMessages] = useState(INIT_MESSAGES)
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -92,20 +103,141 @@ export default function ChatWindow() {
       setPreProcStep('login')
       setPostOpStep('login')
       setFormAnswers(INIT_FORM)
+      setEpicRecord(null)
+      setCurrentPatientId(null)
+      setRegStep(null)
+      setRegData({ patient_id: '', patient_name: '', patient_dob: '', phone_number: '' })
       addMsg({ role: 'bot', type: 'welcome', content: '' })
     }
   }
 
-  const handleSingpassLogin = () => {
-    addMsg({ role: 'user', type: 'text', content: 'Completes Login' })
-    if (mode === 'post_operation') {
-      addMsg({ role: 'bot', type: 'text', content: 'Thanks for signing in. Here is your post-operation checklist.' })
-      addMsg({ role: 'bot', type: 'postop_doc', content: '' })
-      setPostOpStep('complete')
-    } else {
-      addMsg({ role: 'bot', type: 'text', content: 'Thanks for signing in. We will now proceed with the form.' })
-      addMsg({ role: 'bot', type: 'text', content: 'Do you have any hospital admission in the last 3 months?\n• Yes / No' })
-      setPreProcStep('q_admission')
+  const handleSingpassLogin = async (patientId) => {
+    addMsg({ role: 'user', type: 'text', content: `Logged in as ${patientId}` })
+    setCurrentPatientId(patientId)
+    setLoading(true)
+    try {
+      // Try existing patient in DB first, fall back to EPIC mock
+      let patientName = null
+      let epicRec = null
+      try {
+        const { data: patient } = await getPatient(patientId)
+        patientName = patient.patient_name
+      } catch {
+        // Not in DB — check EPIC mock
+        try {
+          const { data: rec } = await getEpicRecord(patientId)
+          epicRec = rec
+          patientName = rec.record_name
+          setEpicRecord(rec)
+        } catch {
+          patientName = null
+        }
+      }
+
+      if (patientName) {
+        // Existing patient
+        if (!epicRec) {
+          try { ({ data: epicRec } = await getEpicRecord(patientId)); setEpicRecord(epicRec) } catch { /* no EPIC record */ }
+        }
+        // For post-op: always merge the latest Mongo acknowledgement on top of EPIC.
+        // EPIC is the seed; the latest pre-proc submission is the most recent decision and
+        // must drive Post-Op's Eye/Diagnosis so Site (Financial) tallies with Eye (Post-Op).
+        // EPIC fields not stored in Mongo (e.g. record_medication) are preserved by the merge.
+        if (mode === 'post_operation') {
+          try {
+            const { data: latest } = await getLatestAcknowledgement(patientId)
+            epicRec = { ...(epicRec || {}), ...latest }
+            setEpicRecord(epicRec)
+          } catch { /* no prior acknowledgement */ }
+        }
+        // Patient is in our DB but not in EPIC (and no prior Mongo record). Seed epicRec with
+        // the known identity so buildPayload writes the acknowledgement under the real
+        // patient_id — otherwise it falls back to 'UNKNOWN' and the post-op flow can't
+        // retrieve the just-saved record_eyes.
+        if (!epicRec) {
+          epicRec = { patient_id: patientId, record_name: patientName }
+          setEpicRecord(epicRec)
+        }
+        if (mode === 'post_operation') {
+          addMsg({ role: 'bot', type: 'text', content: `Welcome back, ${patientName}. Here is your post-operation checklist.` })
+          addMsg({ role: 'bot', type: 'postop_doc', content: '', formData: epicRec })
+          setPostOpStep('complete')
+        } else {
+          addMsg({ role: 'bot', type: 'text', content: `Welcome back, ${patientName}. We will now proceed with the form.` })
+          addMsg({ role: 'bot', type: 'text', content: 'Would you like to update your information?\n• Yes / No' })
+          setPreProcStep('ask_update')
+        }
+      } else {
+        // New patient — start registration
+        setRegData({ patient_id: patientId, patient_name: '', patient_dob: '', phone_number: '' })
+        setRegStep('name')
+        addMsg({ role: 'bot', type: 'text', content: `We couldn't find an existing record for ${patientId}. Let's set up your profile.\n\nWhat is your full name?` })
+      }
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleRegistration = async (text) => {
+    setInput('')
+    addMsg({ role: 'user', type: 'text', content: text })
+
+    if (regStep === 'name') {
+      const name = text.trim()
+      // TBL_PATIENT.patient_name is varchar(255)
+      if (!name || name.length > 255) {
+        addMsg({ role: 'bot', type: 'text', content: 'Please enter a valid name (1–255 characters).\n\nWhat is your full name?' })
+        return
+      }
+      setRegData(prev => ({ ...prev, patient_name: name }))
+      setRegStep('dob')
+      addMsg({ role: 'bot', type: 'text', content: 'What is your date of birth? (DD-MM-YYYY, e.g. 01-01-1990)' })
+    } else if (regStep === 'dob') {
+      const dob = text.trim()
+      const m = dob.match(/^(\d{2})-(\d{2})-(\d{4})$/)
+      if (!m) {
+        addMsg({ role: 'bot', type: 'text', content: 'Please enter your date of birth in DD-MM-YYYY format (e.g. 01-01-1990).' })
+        return
+      }
+      const dd = parseInt(m[1], 10)
+      const mm = parseInt(m[2], 10)
+      const yyyy = parseInt(m[3], 10)
+      const currentYear = new Date().getFullYear()
+      if (mm < 1 || mm > 12 || dd < 1 || dd > 31 || yyyy < 1900 || yyyy > currentYear) {
+        addMsg({ role: 'bot', type: 'text', content: "That date doesn't look right. Please enter a valid date in DD-MM-YYYY format (e.g. 01-01-1990)." })
+        return
+      }
+      setRegData(prev => ({ ...prev, patient_dob: dob }))
+      setRegStep('phone')
+      addMsg({ role: 'bot', type: 'text', content: 'What is your phone number? (digits only, may start with +, up to 20 characters)' })
+    } else if (regStep === 'phone') {
+      const phone = text.trim()
+      // TBL_PATIENT.phone_number is varchar(20); allow optional leading '+'
+      if (!/^\+?\d+$/.test(phone) || phone.length > 20) {
+        addMsg({ role: 'bot', type: 'text', content: 'Please enter a valid phone number (digits only, may start with +, up to 20 characters).' })
+        return
+      }
+      const finalData = { ...regData, phone_number: phone }
+      setLoading(true)
+      try {
+        await createPatient(finalData)
+        setRegStep(null)
+        // Set epicRecord so subsequent buildPayload and post-op use the correct patient_id
+        setEpicRecord({ patient_id: finalData.patient_id, record_name: finalData.patient_name })
+        addMsg({ role: 'bot', type: 'text', content: `Thank you, ${finalData.patient_name}! Your profile has been created.` })
+        if (mode === 'post_operation') {
+          addMsg({ role: 'bot', type: 'text', content: 'Here is your post-operation checklist.' })
+          addMsg({ role: 'bot', type: 'postop_doc', content: '', formData: null })
+          setPostOpStep('complete')
+        } else {
+          addMsg({ role: 'bot', type: 'text', content: 'We will now proceed with the form.\n\nDo you have any hospital admission in the last 3 months?\n• Yes / No' })
+          setPreProcStep('q_admission')
+        }
+      } catch {
+        addMsg({ role: 'bot', type: 'text', content: 'Sorry, there was an error saving your profile. Please try again.' })
+      } finally {
+        setLoading(false)
+      }
     }
   }
 
@@ -113,6 +245,67 @@ export default function ChatWindow() {
     setInput('')
     addMsg({ role: 'user', type: 'text', content: text })
     const lower = text.toLowerCase().trim()
+
+    if (preProcStep === 'ask_update') {
+      if (!lower.startsWith('y') && !lower.startsWith('n')) {
+        addMsg({ role: 'bot', type: 'text', content: 'Sorry, I didn\'t understand that. Please answer Yes or No.\n\nWould you like to update your information?\n• Yes / No' })
+        return
+      }
+      if (lower.startsWith('n')) {
+        // Fetch latest saved acknowledgement from MongoDB to display correct data
+        setLoading(true)
+        try {
+          const { data: latest } = await getLatestAcknowledgement(currentPatientId)
+          setPreProcStep('complete')
+          addMsg({ role: 'bot', type: 'text', content: 'Here is your existing form.' })
+          addMsg({
+            role: 'bot',
+            type: 'financial_doc',
+            content: '',
+            formData: {
+              patientName: latest.record_name || epicRecord?.record_name || '',
+              date: formatDate(latest.issued),
+              surgeon: 'Dr. Koh CS',
+              mcr: '0001231241',
+              site: latest.record_eyes || epicRecord?.record_eyes || '',
+              diagnosis: latest.record_diagnosis || epicRecord?.record_diagnosis || 'H35.31',
+              medication: latest.record_medication || epicRecord?.record_medication || '',
+              estCost: 123,
+              injections: latest.record_number_of_injections || 1,
+              paymentMode: 'Medisave',
+            },
+          })
+        } catch {
+          // No prior record saved — fall back to EPIC data
+          setPreProcStep('complete')
+          addMsg({ role: 'bot', type: 'text', content: 'Here is your existing form.' })
+          addMsg({
+            role: 'bot',
+            type: 'financial_doc',
+            content: '',
+            formData: {
+              patientName: epicRecord?.record_name || '',
+              date: formatDate(epicRecord?.issued),
+              surgeon: 'Dr. Koh CS',
+              mcr: '0001231241',
+              site: epicRecord?.record_eyes || '',
+              diagnosis: epicRecord?.record_diagnosis || 'H35.31',
+              medication: epicRecord?.record_medication || '',
+              estCost: 123,
+              injections: epicRecord?.record_number_of_injections || 1,
+              paymentMode: 'Medisave',
+            },
+          })
+        } finally {
+          setLoading(false)
+        }
+      } else {
+        // Update — proceed to the 3 questions
+        addMsg({ role: 'bot', type: 'text', content: 'Do you have any hospital admission in the last 3 months?\n• Yes / No' })
+        setPreProcStep('q_admission')
+      }
+      return
+    }
 
     if (preProcStep === 'q_admission') {
       if (!lower.startsWith('y') && !lower.startsWith('n')) {
@@ -141,14 +334,41 @@ export default function ChatWindow() {
         return
       }
       const eyes = isBoth ? 'OU' : isLeft ? 'OS' : 'OD'
-      const updated = { ...formAnswers, record_eyes: eyes }
+      setFormAnswers(prev => ({ ...prev, record_eyes: eyes }))
+      setPreProcStep('cost_confirm')
+      addMsg({ role: 'bot', type: 'text', content: `The total cost of the procedure will be $${PROCEDURE_COST}, do you want to proceed?\n• Yes / No` })
+    } else if (preProcStep === 'cost_confirm') {
+      if (!lower.startsWith('y') && !lower.startsWith('n')) {
+        addMsg({ role: 'bot', type: 'text', content: `Sorry, I didn't understand that. Please answer Yes or No.\n\nThe total cost of the procedure will be $${PROCEDURE_COST}, do you want to proceed?` })
+        return
+      }
+      if (lower.startsWith('n')) {
+        setPreProcStep('complete')
+        addMsg({ role: 'bot', type: 'text', content: "Understood. You may return to the menu when you're ready." })
+        return
+      }
+      setPreProcStep('payment_mode')
+      addMsg({ role: 'bot', type: 'text', content: 'Would you like to use your Medisave or Next-of-Kin (NOK) Medisave?' })
+    } else if (preProcStep === 'payment_mode') {
+      const isNok = lower.includes('nok') || lower.includes('next-of-kin') || lower.includes('next of kin')
+      const isMedisave = lower.includes('medisave')
+      if (!isNok && !isMedisave) {
+        addMsg({ role: 'bot', type: 'text', content: "Sorry, I didn't understand that. Please answer Medisave or NOK Medisave." })
+        return
+      }
+      const paymentMode = isNok ? 'NOK Medisave' : 'Medisave'
+      const updated = { ...formAnswers, payment_mode: paymentMode }
       setFormAnswers(updated)
       setPreProcStep('complete')
       setLoading(true)
+      addMsg({ role: 'bot', type: 'text', content: 'I will now redirect you to fill up the Medisave form.' })
       try {
-        const res = await submitAcknowledgement(buildPayload(updated))
+        const res = await submitAcknowledgement(buildPayload(updated, epicRecord))
         const record = res.data.record
         const payment = res.data.payment
+        const confirmedEyes = record?.record_eyes || updated.record_eyes
+        // Keep epicRecord in sync so post-op checklist uses the same eye value
+        setEpicRecord(prev => ({ ...(prev || {}), record_eyes: confirmedEyes }))
         addMsg({
           role: 'bot',
           type: 'financial_doc',
@@ -158,15 +378,16 @@ export default function ChatWindow() {
             date: formatDate(record?.issued),
             surgeon: 'Dr. Koh CS',
             mcr: '0001231241',
-            site: record?.record_eyes || eyes,
+            site: confirmedEyes,
             diagnosis: record?.record_diagnosis || 'H35.31',
-            estCost: payment?.payment_estCostPerInjection || 123,
+            medication: record?.record_medication || epicRecord?.record_medication || '',
+            estCost: payment?.payment_estCostPerInjection || PROCEDURE_COST,
             injections: record?.record_number_of_injections || 1,
-            paymentMode: payment?.payment_mode || 'Medisave',
+            paymentMode: payment?.payment_mode || paymentMode,
           },
         })
       } catch {
-        addMsg({ role: 'bot', type: 'financial_doc', content: '', formData: { site: eyes } })
+        addMsg({ role: 'bot', type: 'financial_doc', content: '', formData: { site: updated.record_eyes, paymentMode } })
       } finally {
         setLoading(false)
       }
@@ -177,6 +398,11 @@ export default function ChatWindow() {
     const text = input.trim()
     if (!text || loading) return
     setInput('')
+
+    if (regStep) {
+      handleRegistration(text)
+      return
+    }
 
     if (mode === 'pre_procedure') {
       if (preProcStep !== 'login' && preProcStep !== 'complete') {
@@ -204,13 +430,17 @@ export default function ChatWindow() {
     }
   }
 
-  const showYesNo = mode === 'pre_procedure' && (preProcStep === 'q_admission' || preProcStep === 'q_stroke')
+  const showYesNo = mode === 'pre_procedure' && (preProcStep === 'ask_update' || preProcStep === 'q_admission' || preProcStep === 'q_stroke' || preProcStep === 'cost_confirm')
   const showEye = mode === 'pre_procedure' && preProcStep === 'q_eye'
-  const inputDisabled = (mode === 'pre_procedure' && (preProcStep === 'login' || preProcStep === 'complete'))
+  const showPaymentMode = mode === 'pre_procedure' && preProcStep === 'payment_mode'
+  const showReturnMenu = (mode === 'pre_procedure' && preProcStep === 'complete') || (mode === 'post_operation' && postOpStep === 'complete')
+  const inputDisabled = !regStep && (
+    (mode === 'pre_procedure' && (preProcStep === 'login' || preProcStep === 'complete'))
     || (mode === 'post_operation' && (postOpStep === 'login' || postOpStep === 'complete'))
+  )
 
-  const placeholder =
-    mode === 'general_enquiry' ? 'Write your message'
+  const placeholder = regStep ? 'Type your answer…'
+    : mode === 'general_enquiry' ? 'Write your message'
     : mode === 'pre_procedure' && !inputDisabled ? 'Write your answer…'
     : 'General Enquiry'
 
@@ -261,7 +491,7 @@ export default function ChatWindow() {
       </div>
 
       {/* Suggestion chips — full-width bg, centred content */}
-      {(showYesNo || showEye) && (
+      {(showYesNo || showEye || showPaymentMode || showReturnMenu) && (
         <div style={{ background: '#fff', borderTop: '1px solid #F0F0F0' }}>
           <div style={{ ...centered, display: 'flex', gap: '8px', padding: '10px 20px', flexWrap: 'wrap' }}>
             {showYesNo && (
@@ -276,6 +506,17 @@ export default function ChatWindow() {
                 <button onClick={() => handlePreProcAnswer('Left')} style={chipBtn}>Left</button>
                 <button onClick={() => handlePreProcAnswer('Both')} style={chipBtn}>Both</button>
               </>
+            )}
+            {showPaymentMode && (
+              <>
+                <button onClick={() => handlePreProcAnswer('Medisave')} style={chipBtn}>Medisave</button>
+                <button onClick={() => handlePreProcAnswer('NOK Medisave')} style={chipBtn}>NOK Medisave</button>
+              </>
+            )}
+            {showReturnMenu && (
+              <button onClick={() => handleQuickReply('Return Menu')} style={{ ...chipBtn, background: '#3B6EF8', color: '#fff' }}>
+                Return Menu
+              </button>
             )}
           </div>
         </div>
