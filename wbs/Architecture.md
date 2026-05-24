@@ -40,28 +40,37 @@ The backend also includes a multi-agent system (AWS Bedrock AgentCore) with a co
                     │  GET  /epic/patient/{id}/record   (EPIC Record)      │
                     └──────┬──────────┬──────────────┬─────────────────────┘
                            │          │              │
-             ┌─────────────▼──┐  ┌────▼──────────┐  ┌───▼───────────────────┐
-             │  EPIC (Mocked) │  │  AWS Bedrock  │  │      Databases        │
-             │  FHIR R4       │  │  AgentCore    │  │                       │
-             │  (future: real │  │  Coordinator  │  │  PostgreSQL           │
-             │   EPIC API)    │  │  + Agents     │  │  ├─ TBL_PATIENT       │
-             └────────────────┘  └───────────────┘  │  ├─ TBL_IVT          │
-                                                     │  └─ TBL_PAYMENT       │
-                                                     │                       │
-                                                     │  MongoDB              │
-                                                     │  └─ TBL_PATIENT_RECORDS│
-                                                     └───────────────────────┘
+             ┌─────────────▼──┐  ┌────▼──────────┐  ┌───▼─────────────────────┐
+             │  EPIC façade   │  │  AWS Bedrock  │  │       Databases         │
+             │  FHIR R4       │  │  AgentCore    │  │                         │
+             │  (reads local  │  │  Coordinator  │  │  PostgreSQL             │
+             │   DBs in POC;  │  │  + Agents     │  │  ├─ TBL_PATIENT         │
+             │   real EPIC    │  │               │  │  ├─ TBL_IVT             │
+             │   API in prod) │  │               │  │  └─ TBL_PAYMENT         │
+             └────────┬───────┘  └───────────────┘  │                         │
+                      │                              │  MongoDB                │
+                      └──────────────────────────────▶  └─ TBL_PATIENT_RECORDS │
+                                                     │     (REC-{id}-001 seeds │
+                                                     │      represent EPIC's   │
+                                                     │      canonical record)  │
+                                                     └─────────────────────────┘
 
   ─ ─ ─ ─ ─ ─ ─ ─ ─  Separate System (AWS Bedrock AgentCore)  ─ ─ ─ ─ ─ ─
 
                     ┌───────────────────────────────────────────────────┐
                     │          Coordinator Agent  (port 8080)           │
-                    │   Entry point · classifies query · synthesizes    │
+                    │   Entry point · search_medical_kb(query) via      │
+                    │   bedrock-agent-runtime.retrieve(KB_ID)           │
                     └──────────────┬────────────────────────────────────┘
-                                   │  invoke_runtime(ARN, query)
-                     ┌─────────────┴──────────────┐
-                     │                            │
-           ┌─────────▼──────────┐    ┌────────────▼───────────┐
+                                   │  RAG against AWS Knowledge Base
+                                   ▼
+                    ┌───────────────────────────────────────────────────┐
+                    │     AWS Knowledge Base  (TTSH Library docs)       │
+                    │     AWS_KNOWLEDGE_BASE_ID · AWS_KB_REGION         │
+                    └───────────────────────────────────────────────────┘
+
+           Scaffolded (built + dockerised) but not wired into agent.py today:
+           ┌────────────────────┐    ┌────────────────────────┐
            │  Financial Agent   │    │  Healthcare Agent      │
            │  (port 8080)       │    │  (port 8080)           │
            │  Budgeting, debt,  │    │  Symptom guidance,     │
@@ -99,15 +108,17 @@ EyeCanHelp-Buddy/
 │           ├── EpicLookup.jsx              # (legacy — not rendered)
 │           ├── AcknowledgementForm.jsx      # (legacy — not rendered)
 │           └── SymptomChecker.jsx           # (legacy — not rendered)
-│       └── __tests__/                     # Vitest test suite (80 tests, 7 files)
+│       └── __tests__/                     # Vitest test suite (90 tests, 7 files)
 │           ├── setup.js                   # jest-dom matchers + scrollIntoView stub
 │           ├── SplashScreen.test.jsx
 │           ├── OnboardingScreen.test.jsx
-│           ├── SingpassLoginButton.test.jsx
+│           ├── SingpassLoginButton.test.jsx  # Requires username typed before login (fireEvent.change + fake timers)
 │           ├── PostOpChecklistDoc.test.jsx
-│           ├── FinancialCounsellingDoc.test.jsx
+│           ├── FinancialCounsellingDoc.test.jsx  # Site / Drug / Payment-mode parity, NOK Medisave handling
 │           ├── MessageBubble.test.jsx
-│           └── ChatWindow.test.jsx        # Full state machine + API mock coverage
+│           └── ChatWindow.test.jsx        # Mocks all 6 client.js exports; full state machine:
+│                                          #   Singpass → ask_update → q_admission → q_stroke → q_eye
+│                                          #   → cost_confirm → payment_mode → financial doc
 │
 ├── backend/                           # FastAPI Python API
 │   ├── main.py                        # App entry point, router registration, DB lifespan
@@ -116,8 +127,8 @@ EyeCanHelp-Buddy/
 │   ├── Dockerfile                     # FastAPI backend image (uvicorn, port 8000)
 │   ├── .env.example
 │   ├── database/
-│   │   ├── postgres.py                # SQLAlchemy async engine + session
-│   │   └── mongo.py                   # Motor async client (singleton)
+│   │   ├── postgres.py                # SQLAlchemy async engine + session + Postgres seed
+│   │   └── mongo.py                   # Motor async client + init_mongo() seeds P001/P002
 │   ├── models/                        # SQLAlchemy ORM models (PostgreSQL)
 │   │   ├── patient.py                 # TBL_PATIENT
 │   │   ├── ivt.py                     # TBL_IVT
@@ -131,20 +142,23 @@ EyeCanHelp-Buddy/
 │   │   ├── epic.py                    # GET /epic/patient/{id}
 │   │   │                              # GET /epic/patient/{id}/record
 │   │   ├── acknowledgement.py         # POST /acknowledgement
+│   │   │                              # GET /acknowledgement/latest/{patient_id}
+│   │   ├── patient.py                 # GET /patient/{id}, POST /patient (DB-backed)
 │   │   ├── symptom.py                 # POST /symptoms
 │   │   └── chatbot.py                 # POST /chat
 │   ├── services/
-│   │   ├── epic_service.py            # Mock EPIC data (POC seed: P001, P002)
+│   │   ├── epic_service.py            # EPIC façade — reads Postgres (TBL_PATIENT) and Mongo (REC-{id}-001 seed)
 │   │   ├── acknowledgement_service.py # Mongo + Postgres write
 │   │   ├── symptom_service.py         # Keyword-based triage (MILD/SEVERE/UNCLEAR)
 │   │   └── llm_service.py             # AWS Bedrock AgentCore invoke client
 │   ├── agents/                        # AWS Bedrock AgentCore multi-agent system
-│   │   ├── coordinator/               # Orchestrator — routes to specialist agents
+│   │   ├── coordinator/               # Orchestrator agent (currently KB-RAG only)
 │   │   │   ├── main.py               # AgentCore entrypoint (port 8080)
-│   │   │   ├── agent.py              # Coordinator agent definition
-│   │   │   ├── subagent_router.py    # Invokes specialist runtimes via ARN
+│   │   │   ├── agent.py              # Coordinator: uses get_kb_tools()
+│   │   │   ├── subagent_router.py    # Invokes specialist runtimes via ARN (scaffolded)
 │   │   │   ├── tools/
-│   │   │   │   └── routing_tools.py  # call_financial_agent, call_healthcare_agent
+│   │   │   │   ├── kb_tools.py       # search_medical_kb — RAG against AWS Knowledge Base
+│   │   │   │   └── routing_tools.py  # call_financial_agent, call_healthcare_agent (defined but not wired in agent.py)
 │   │   │   ├── Dockerfile
 │   │   │   └── requirements.txt      # boto3, bedrock-agentcore, strands-agents
 │   │   ├── financial/                 # Financial specialist runtime
@@ -157,6 +171,14 @@ EyeCanHelp-Buddy/
 │   │       ├── agent.py              # Symptom guidance, medication education
 │   │       ├── Dockerfile
 │   │       └── requirements.txt      # bedrock-agentcore, strands-agents
+│   ├── scripts/
+│   │   └── db/                          # Standalone DB-init scripts for prod deploys
+│   │       ├── 01_postgres_schema.sql         # DDL (idempotent) — always run
+│   │       ├── 02_postgres_reference_data.sql # IVT + payment-mode rows — always run
+│   │       ├── 03_postgres_poc_seed.sql       # P001/P002 demo patients — staging only
+│   │       ├── 01_mongo_schema.js             # Collection + indexes — always run
+│   │       ├── 02_mongo_poc_seed.js           # P001/P002 canonical EPIC records — staging only
+│   │       └── README.md                      # Run order, prod vs staging, verify steps
 │   └── tests/
 │       └── test_multi_agent.py        # Integration test: coordinator + specialists
 │
@@ -173,9 +195,12 @@ EyeCanHelp-Buddy/
 
 | Method | Endpoint | Use Case | Description | Frontend triggered? |
 |--------|----------|----------|-------------|---------------------|
-| GET | `/epic/patient/{id}` | UC1 | Retrieve patient demographics (FHIR Patient) | No (backend only) |
-| GET | `/epic/patient/{id}/record` | UC1 | Retrieve clinical record (FHIR DiagnosticReport) | No (backend only) |
+| GET | `/epic/patient/{id}` | UC1 | Retrieve patient demographics (FHIR Patient) | Yes (Singpass login fallback when not in DB) |
+| GET | `/epic/patient/{id}/record` | UC1 | Retrieve clinical record (FHIR DiagnosticReport) | Yes (UC2 login — fetches latest record for known EPIC patient) |
+| GET | `/patient/{id}` | UC2 | Fetch patient from PostgreSQL `TBL_PATIENT` | Yes (Singpass login primary DB lookup) |
+| POST | `/patient` | UC2 | Register new patient (name / DOB / phone) | Yes (new-patient registration sub-flow) |
 | POST | `/acknowledgement` | UC2 | Submit patient acknowledgement + payment | Yes (ChatWindow UC2 flow) |
+| GET | `/acknowledgement/latest/{patient_id}` | UC2 | Most recent MongoDB record for patient | Yes (returning patient — skip re-asking history) |
 | POST | `/symptoms` | UC3 | Keyword-based symptom triage | No — PostOpChecklistDoc is static |
 | POST | `/chat` | All | LLM chatbot conversation (AWS Bedrock AgentCore) | Yes (General Enquiry) |
 
@@ -229,8 +254,24 @@ User taps "Fill up pre-procedure" pill  →  mode = 'pre_procedure', preProcStep
   → SingpassLoginButton renders inline in chat (amber button)
 
 User taps Singpass Login (simulated, 600 ms delay)
-  → simulateSingpassLogin() resolves { patient_id: 'P001' }
-  → preProcStep = 'q_admission'
+  → handleSingpassLogin(patientId) resolves identity in this order:
+       1. GET /patient/{id}                 → existing patient in PostgreSQL
+       2. GET /epic/patient/{id}/record     → fall back to mocked EPIC seed
+       3. Neither found                     → new-patient registration:
+              regStep: 'name' → 'dob' → 'phone' → POST /patient → continue UC2
+              Validation per field (re-asks on failure, does not advance):
+                • name  : 1–255 chars (TBL_PATIENT.patient_name varchar(255))
+                • dob   : strict DD-MM-YYYY, day 1–31, month 1–12, year 1900–current
+                • phone : digits only, optional leading '+', max 20 chars (varchar(20))
+       Safety net: if (1) succeeds but (2) fails, epicRecord is seeded with
+         { patient_id, record_name } so buildPayload writes the acknowledgement under
+         the real patient_id instead of falling back to 'UNKNOWN' (which would orphan
+         the record from later /acknowledgement/latest lookups).
+  → If existing patient: bot greets "Welcome back, …" and asks
+       "Would you like to update your information? Yes/No"  (preProcStep = 'ask_update')
+     • Yes → re-asks 3 medical history questions below
+     • No  → GET /acknowledgement/latest/{patient_id} and renders FinancialCounsellingDoc
+  → If new patient (after registration completes): preProcStep = 'q_admission'
   → Bot asks 3 medical history questions one at a time:
 
     Q1: "Do you have any hospital admission in the last 3 months? Yes/No"
@@ -249,7 +290,20 @@ User taps Singpass Login (simulated, 600 ms delay)
         User answers via chip (Right/Left/Both) or free text
         Valid:   contains right/od, left/os, both/bilat/ou  →  formAnswers.record_eyes = OD | OS | OU
         Invalid: bot re-asks Q3 ("Sorry, I didn't understand that. Please answer Right, Left, or Both.")
-        preProcStep → 'complete'
+        preProcStep → 'cost_confirm'
+
+    Q4 (cost_confirm): "The total cost of the procedure will be $123, do you want to proceed? Yes/No"
+        Yes  →  preProcStep = 'payment_mode'
+        No   →  preProcStep = 'complete' (polite stop; Return Menu chip shown — NO submission)
+        Invalid: bot re-asks Q4
+
+    Q5 (payment_mode): "Would you like to use your Medisave or Next-of-Kin (NOK) Medisave?"
+        Chips: Medisave / NOK Medisave
+        Free text containing 'nok' / 'next-of-kin' / 'next of kin' → 'NOK Medisave'
+        Free text containing 'medisave' (without NOK)            → 'Medisave'
+        Stored in formAnswers.payment_mode and forwarded to buildPayload → payment.payment_mode.
+        Bot then says: "I will now redirect you to fill up the Medisave form."
+        preProcStep → 'complete', and only NOW the POST /acknowledgement fires.
 
   → POST /acknowledgement  {
         patient_record: { patient_id, record_eyes, record_diagnosis: 'H35.31',
@@ -266,8 +320,11 @@ User taps Singpass Login (simulated, 600 ms delay)
 
   → ChatWindow renders FinancialCounsellingDoc inline:
         Title:    "OUTPATIENT PROCEDURES (INTRAVITREAL) — FINANCIAL COUNSELLING & ADVICE"
-        Fields:   Surgeon · Date · MCR · Site (OD/OS/OU checkboxes) · Diagnosis (ICD-10)
-        Procedure: 1B SL700V1A — Nurse-Led  |  Drug: Faricimab (Vabysmo)
+        Fields:   Surgeon · Date · MCR · Site (LEFT / RIGHT / BOTH — mutually exclusive)
+                  · Diagnosis (ICD-10)
+        Procedure: 1B SL700V1A — Nurse-Led
+        Drug:     Lucentis / Faricimab / Eylea / Others (mutually exclusive; matches
+                  record_medication from EPIC, defaults to Faricimab when absent)
         Bill:     $123 for 1 injection · Counselling language · Payment mode
         Footer:   Signature lines (Counselling Staff / Patient / Relationship)
 ```
@@ -280,17 +337,24 @@ User taps "Fill up post-operation checklist" pill  →  mode = 'post_operation',
   → Input bar disabled while waiting for login
 
 User taps Singpass Login (simulated, 600 ms delay)
+  → handleSingpassLogin resolves identity (same DB-first / EPIC-fallback chain as UC2),
+    then builds the post-op record source as:
+        epicRec  =  { ...EPIC record (if any), ...latest Mongo acknowledgement (if any) }
+    Latest Mongo ack overrides EPIC fields (record_eyes, record_diagnosis, issued) so the
+    most recent pre-proc submission drives the Post-Op display. EPIC-only fields not
+    stored in Mongo (record_medication) survive the merge. This is what guarantees Site
+    (Financial) and Eye (Post-Op) tally across the two flows for the same patient.
   → postOpStep = 'complete'
   → Bot: "Thanks for signing in. Here is your post-operation checklist."
-  → ChatWindow renders PostOpChecklistDoc inline (no API call):
+  → ChatWindow renders PostOpChecklistDoc inline (no further API call):
 
         Title:   "POST INTRAVITREAL INJECTION — Advice form (filled)"
 
         You have:
-          [✓] Age-related macular degeneration
+          [✓] <diagnosis label from record_diagnosis>   e.g. Age-related macular degeneration
 
         Injection received:
-          Faricimab · Right eye · <today's date>
+          <Lucentis | Faricimab | Eylea | Others> · <Right | Left | Both> eye · <issued date>
 
         Normal side effects (black text):
           • Eye discomfort or mild eye pain
@@ -309,6 +373,28 @@ User taps Singpass Login (simulated, 600 ms delay)
 
   → Input bar remains disabled after checklist is displayed.
 ```
+
+### Form parity (UC2 ↔ UC3)
+
+The Financial Counselling form (UC2) and the Post-Op Checklist (UC3) must show the same
+two fields for the same patient — Site (LEFT/RIGHT/BOTH) and Drug (Lucentis/Faricimab/
+Eylea/Others). Both forms derive these from the same canonical sources and use the same
+fallback rules so they cannot drift:
+
+| Field         | Canonical source                                                | Default if missing |
+|---------------|-----------------------------------------------------------------|--------------------|
+| Site          | latest Mongo `record_eyes` → EPIC `record_eyes` → user q_eye    | OD → RIGHT         |
+| Drug          | latest Mongo `record_medication` (n/a today) → EPIC `record_medication` | Faricimab (Vabysmo) |
+| Payment Mode  | user `payment_mode` step (Medisave / NOK Medisave) → payment.payment_mode | Medisave    |
+
+`NOK Medisave` is operationally a Medisave payment (paid from a next-of-kin's account),
+so the Financial form ticks the `Medisave` checkbox for both values. The NOK distinction
+is preserved in the chat history and in `payment.payment_mode` for the eventual
+downstream Medisave form.
+
+Both forms use the same `value || default` fallback (not JS destructuring default) so that
+an empty string from a stale Mongo doc still resolves to the canonical default in both
+places. Drug-name matching is a case-insensitive `.includes()` over the four option names.
 
 ### Return Menu
 ```
@@ -331,14 +417,20 @@ General Enquiry text  →  POST /chat  →  llm_service.py
               runtimeSessionId = AGENTCORE_RUNTIME_SESSION_ID or uuid4(),
               payload = JSON({ "prompt": transcript })
          )
-  → Coordinator Agent classifies query domain:
-         financial   →  invokes Financial Agent  (FINANCIAL_AGENT_RUNTIME_ARN)
-                        handles: budgeting, Medisave limits, cost estimates, insurance
-         healthcare  →  invokes Healthcare Agent  (HEALTHCARE_AGENT_RUNTIME_ARN)
-                        handles: IVT procedure Q&A, medication education, symptom guidance
-  → Specialist agent returns answer; Coordinator synthesises response
+  → Coordinator Agent (currently wired with KB tool only):
+         search_medical_kb(query)  →  bedrock-agent-runtime.retrieve(
+                                          knowledgeBaseId = AWS_KNOWLEDGE_BASE_ID,
+                                          region          = AWS_KB_REGION or AWS_REGION)
+                                   →  returns ranked excerpts from the TTSH Library
+         Coordinator answers from KB excerpts; tells user when content is not in the KB.
   → Response extracted from SSE stream / JSON body
   → reply string returned to POST /chat caller → appended as bot bubble
+
+Scaffolded but NOT currently wired into the coordinator agent (still buildable / deployable):
+  - subagent_router.py + tools/routing_tools.py: call_financial_agent / call_healthcare_agent
+  - Financial Agent runtime  (FINANCIAL_AGENT_RUNTIME_ARN)   — budgeting, Medisave, insurance
+  - Healthcare Agent runtime (HEALTHCARE_AGENT_RUNTIME_ARN)  — IVT Q&A, medication, symptoms
+  To enable, add `get_routing_tools(router)` to the tools list in coordinator/agent.py.
 ```
 
 ---
@@ -371,7 +463,7 @@ General Enquiry text  →  POST /chat  →  llm_service.py
 | payment_diagnosis | varchar(50) | ICD-10 code |
 | payment_maxMedisave | float | SGD |
 | payment_estCostPerInjection | float | SGD |
-| payment_mode | varchar(50) | Medisave / Cash / MediShield / CHAS |
+| payment_mode | varchar(50) | Medisave / NOK Medisave / Cash / MediShield / CHAS (Pydantic `Literal`) |
 
 ### MongoDB (flexible, document-based)
 
@@ -400,7 +492,7 @@ Singapore's MOH healthcare ecosystem uses **FHIR R4** (HealthHub, NEHR). For thi
 | Aspect | POC (now) | Production (future) |
 |--------|-----------|---------------------|
 | FHIR compliance | FHIR-aligned Pydantic models only | Full FHIR R4 server |
-| EPIC integration | Mocked seed data (P001, P002) | Real EPIC FHIR R4 API |
+| EPIC integration | Façade reading from local Postgres + Mongo seed (P001, P002) | Real EPIC FHIR R4 API |
 | Code systems | ICD-10 strings in fields | Validated SNOMED/LOINC terminologies |
 | Auth | None / API key | SMART on FHIR (OAuth2) |
 | Singapore interop | Not connected | Connect to MOH NEHR / HealthHub |
@@ -423,7 +515,7 @@ All Pydantic schemas carry a `resourceType` field matching FHIR R4 resource name
 | Containerization | Docker | One Dockerfile per agent runtime |
 | CI/CD | GitHub Actions → AWS ECR | Automated build + push |
 | Code quality | SonarQube + Snyk | Static analysis + security scanning |
-| Frontend testing | Vitest 4 + React Testing Library | 80 tests across 7 files; runs in CI before build |
+| Frontend testing | Vitest 4 + React Testing Library | 90 tests across 7 files; runs in CI before build. ChatWindow tests mock all 6 `api/client` exports (the `vi.mock` factory must list every function ChatWindow imports — missing mocks silently force the runtime into `undefined()` calls that derail the flow) |
 
 ---
 
@@ -431,17 +523,19 @@ All Pydantic schemas carry a `resourceType` field matching FHIR R4 resource name
 
 | Variable | Used by | Description |
 |----------|---------|-------------|
-| `POSTGRES_URL` | FastAPI backend | PostgreSQL connection string (optional; default: `postgresql+asyncpg://user:password@localhost:5432/eyecanhelpbuddy`) |
-| `MONGO_URL` | FastAPI backend | MongoDB connection string (optional; default: `mongodb://localhost:27017`) |
-| `MONGO_DB` | FastAPI backend | MongoDB database name (optional; default: `eyecanhelpbuddy`) |
+| `POSTGRES_URL` | FastAPI backend | PostgreSQL connection string. Repo `.env`: `postgresql+asyncpg://postgres:postgres@localhost:5432/eyecanhelpbuddy` |
+| `MONGO_URL` | FastAPI backend | MongoDB connection string. Repo `.env`: `mongodb://localhost:27019` *(code-level fallback in `database/mongo.py` is `27017`)* |
+| `MONGO_DB` | FastAPI backend | MongoDB database name. Default: `eyecanhelpbuddy` |
 | `AWS_REGION` | FastAPI backend | AWS region for Bedrock (e.g. `us-east-1`) |
 | `AWS_DEFAULT_REGION` | FastAPI backend | AWS SDK default region |
 | `AGENTCORE_COORDINATOR_RUNTIME_ARN` | `llm_service.py` | ARN of the coordinator agent runtime |
 | `AGENTCORE_COORDINATOR_ENDPOINT` | `llm_service.py` | Endpoint URL for coordinator runtime invocation |
 | `AGENTCORE_TIMEOUT_SECONDS` | `llm_service.py` | HTTP timeout for AgentCore calls (default: `30`) |
 | `AGENTCORE_RUNTIME_SESSION_ID` | `llm_service.py` | Optional fixed session ID; auto-generated (uuid4) if unset |
-| `FINANCIAL_AGENT_RUNTIME_ARN` | Coordinator agent | ARN of financial specialist runtime |
-| `HEALTHCARE_AGENT_RUNTIME_ARN` | Coordinator agent | ARN of healthcare specialist runtime |
+| `AWS_KNOWLEDGE_BASE_ID` | Coordinator agent | Knowledge Base ID used by `search_medical_kb` tool (required for KB lookups) |
+| `AWS_KB_REGION` | Coordinator agent | Region for KB queries (optional; defaults to `AWS_REGION`) |
+| `FINANCIAL_AGENT_RUNTIME_ARN` | Coordinator agent (scaffolded) | ARN of financial specialist runtime — only used if routing tools are wired in |
+| `HEALTHCARE_AGENT_RUNTIME_ARN` | Coordinator agent (scaffolded) | ARN of healthcare specialist runtime — only used if routing tools are wired in |
 
 ---
 
@@ -461,6 +555,134 @@ python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 .venv/bin/uvicorn main:app --reload   # http://localhost:8000
 ```
+
+### Local Databases
+
+#### Prerequisites
+
+Create `backend/.env` and ensure the three DB variables are set (the shipped `.env.example` does not include them — add them manually):
+
+```bash
+POSTGRES_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/eyecanhelpbuddy
+MONGO_URL=mongodb://localhost:27019
+MONGO_DB=eyecanhelpbuddy
+```
+
+> The host Mongo port is `27019` (mapped to container `27017`) because port `27017` is typically already occupied on dev machines. The code-level fallback in `backend/database/mongo.py` is `27017`; the `.env` value overrides it.
+
+#### PostgreSQL (via Docker)
+
+```bash
+docker run -d \
+  --name eyecanhelp-postgres \
+  -e POSTGRES_USER=postgres \
+  -e POSTGRES_PASSWORD=postgres \
+  -e POSTGRES_DB=eyecanhelpbuddy \
+  -p 5432:5432 \
+  postgres:16
+```
+
+`init_db()` in `backend/database/postgres.py` runs on FastAPI startup (lifespan handler in `backend/main.py`) and:
+- Creates `TBL_PATIENT`, `TBL_IVT`, `TBL_PAYMENT` via `Base.metadata.create_all()`.
+- Seeds rows: 2 patients (`P001 Tan Ah Kow`, `P002 Lim Siew Eng`), 3 IVT medications (Faricimab / Ranibizumab / Aflibercept), 4 payment-mode rows (Medisave / Cash / MediShield / CHAS). Note: the `payment_mode` enum also accepts `NOK Medisave` at runtime, but no seed row uses it (it's written only when the user picks that option in the pre-procedure chat).
+- Uses `ON CONFLICT DO NOTHING` — safe to restart the backend any number of times.
+
+Verify tables and seed data:
+```bash
+docker exec eyecanhelp-postgres psql -U postgres -d eyecanhelpbuddy -c "\dt"
+docker exec eyecanhelp-postgres psql -U postgres -d eyecanhelpbuddy -c "SELECT * FROM \"TBL_PATIENT\";"
+```
+
+#### pgAdmin (PostgreSQL UI in browser, optional)
+
+```bash
+docker run -d \
+  --name pgadmin \
+  -e PGADMIN_DEFAULT_EMAIL=admin@admin.com \
+  -e PGADMIN_DEFAULT_PASSWORD=admin \
+  -p 5050:80 \
+  dpage/pgadmin4
+```
+
+Open **http://localhost:5050** and log in with `admin@admin.com` / `admin`.
+
+To connect to the database inside pgAdmin:
+1. Right-click **Servers** → **Register → Server**
+2. **General** tab → Name: `eyecanhelp`
+3. **Connection** tab:
+   - Host: `172.17.0.1` *(Docker bridge IP — do not use `localhost`)*
+   - Port: `5432`
+   - Database: `eyecanhelpbuddy`
+   - Username: `postgres`
+   - Password: `postgres`
+4. Click **Save**
+
+#### MongoDB (via Docker)
+
+```bash
+docker run -d \
+  --name eyecanhelp-mongo \
+  -p 27019:27017 \
+  mongo:8.0
+```
+
+`init_mongo()` in `backend/database/mongo.py` runs on FastAPI startup (lifespan handler in `backend/main.py`) and:
+- Seeds the `TBL_PATIENT_RECORDS` collection with the two canonical "EPIC" records:
+  `REC-P001-001` (Tan Ah Kow · H35.31 AMD · OD · Faricimab) and `REC-P002-001`
+  (Lim Siew Eng · H36.0 DME · OS · Aflibercept) — `issued = 2020-01-01` (intentionally
+  historical so any real submission is newer and wins the "latest" sort).
+- Idempotent: upsert keyed by `record_id` with `$setOnInsert`, so re-runs leave existing
+  docs untouched.
+- The collection and the `eyecanhelpbuddy` database are created lazily on first write.
+
+Verify the seed and any user acknowledgements:
+```bash
+docker exec eyecanhelp-mongo mongosh --quiet eyecanhelpbuddy --eval \
+  "db.TBL_PATIENT_RECORDS.find({}, {patient_id:1, record_eyes:1, record_medication:1, issued:1, _id:0}).sort({issued:-1}).limit(10).toArray()"
+```
+
+#### Recommended startup order
+
+1. Start the two database containers (`eyecanhelp-postgres`, `eyecanhelp-mongo`). pgAdmin is optional.
+2. Start the FastAPI backend (`uvicorn main:app --reload`) — `init_db()` seeds Postgres and `init_mongo()` seeds the two canonical EPIC records on first boot.
+3. Start the frontend (`npm run dev`) — Vite proxies `/api` → `http://localhost:8000`.
+
+---
+
+### Production database provisioning
+
+The FastAPI startup hooks (`init_db()` + `init_mongo()`) are convenient for
+dev but you usually don't want the app to be the one creating tables and
+indexes in production. Standalone scripts mirror the same DDL + reference
+data and can be executed by a DBA, a CI/CD job, or a Kubernetes init
+container before the application boots.
+
+Scripts live in [`backend/scripts/db/`](../backend/scripts/db/README.md).
+All are idempotent. Run order:
+
+```bash
+# Production (no demo patients) ---------------------------------------
+psql  "$POSTGRES_URL" -v ON_ERROR_STOP=1 -f 01_postgres_schema.sql
+psql  "$POSTGRES_URL" -v ON_ERROR_STOP=1 -f 02_postgres_reference_data.sql
+mongosh "$MONGO_URL"  --quiet --file 01_mongo_schema.js
+
+# Staging / demo also runs the POC patient seed ----------------------
+psql  "$POSTGRES_URL" -v ON_ERROR_STOP=1 -f 03_postgres_poc_seed.sql
+mongosh "$MONGO_URL"  --quiet --file 02_mongo_poc_seed.js
+```
+
+Notes:
+- `POSTGRES_URL` for `psql` uses the libpq form (`postgres://user:pass@host:5432/db`),
+  not the `postgresql+asyncpg://` URL the app uses — drop the `+asyncpg` suffix.
+- The Mongo schema script also creates two performance indexes that the
+  app relies on but never explicitly declares:
+  `idx_record_id_unique` (unique on `record_id`, supports the EPIC seed
+  lookup `REC-{id}-001`) and `idx_patient_id_issued_desc` (compound on
+  `(patient_id, issued DESC)`, supports `GET /acknowledgement/latest/{id}`).
+- The app's `init_db()` / `init_mongo()` remain safe to call after the
+  scripts have run — they detect the populated state and no-op.
+
+---
 
 ### Multi-Agent Runtimes (AWS Bedrock AgentCore)
 ```bash

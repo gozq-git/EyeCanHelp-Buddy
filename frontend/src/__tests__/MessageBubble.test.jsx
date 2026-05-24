@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import MessageBubble from '../components/MessageBubble'
@@ -65,9 +65,12 @@ describe('MessageBubble — singpass type', () => {
   it('calls onSingpassLogin after the 600 ms simulated delay', () => {
     const onSingpassLogin = vi.fn()
     render(<MessageBubble role="bot" type="singpass" content="" onSingpassLogin={onSingpassLogin} />)
+    // The Singpass button is disabled until a username is typed; populate the input first.
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'p001' } })
     screen.getByRole('button', { name: /singpass login/i }).click()
-    vi.advanceTimersByTime(600)
+    act(() => { vi.advanceTimersByTime(600) })
     expect(onSingpassLogin).toHaveBeenCalledOnce()
+    expect(onSingpassLogin).toHaveBeenCalledWith('P001')
   })
 })
 

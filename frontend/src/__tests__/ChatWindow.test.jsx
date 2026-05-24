@@ -5,20 +5,58 @@ import ChatWindow from '../components/ChatWindow'
 
 // ─── Module mocks ─────────────────────────────────────────────────────────────
 
+// Mock every API client function that ChatWindow imports. Missing mocks would cause
+// `await undefined(...)` to throw inside handleSingpassLogin, pushing the UI into the
+// new-patient registration branch instead of the existing-patient ask_update branch.
 vi.mock('../api/client', () => ({
   sendChatMessage: vi.fn(),
   submitAcknowledgement: vi.fn(),
+  getPatient: vi.fn(),
+  getEpicRecord: vi.fn(),
+  createPatient: vi.fn(),
+  getLatestAcknowledgement: vi.fn(),
 }))
 
 // Isolate ChatWindow from SingpassLoginButton's internal 600ms timer.
-// SingpassLoginButton's own timing is tested in SingpassLoginButton.test.jsx.
+// The real component calls onLogin(uppercased_username); tests use 'P001' here so
+// handleSingpassLogin receives a valid id string rather than a React event object.
 vi.mock('../components/SingpassLoginButton', () => ({
   default: ({ onLogin }) => (
-    <button onClick={onLogin}>Singpass Login</button>
+    <button onClick={() => onLogin('P001')}>Singpass Login</button>
   ),
 }))
 
-import { sendChatMessage, submitAcknowledgement } from '../api/client'
+import {
+  sendChatMessage,
+  submitAcknowledgement,
+  getPatient,
+  getEpicRecord,
+  createPatient,
+  getLatestAcknowledgement,
+} from '../api/client'
+
+// Canonical "existing patient" responses used by the pre/post-op flows so that
+// handleSingpassLogin lands in the existing-patient branch (ask_update / postop_doc).
+const MOCK_PATIENT_RESPONSE = {
+  data: { patient_id: 'P001', patient_name: 'Tan Ah Kow', patient_dob: '1952-08-12', phone_number: '+6591234567' },
+}
+const MOCK_EPIC_RECORD_RESPONSE = {
+  data: {
+    patient_id: 'P001',
+    record_name: 'Tan Ah Kow',
+    record_diagnosis: 'H35.31',
+    record_eyes: 'OD',
+    record_medication: 'Faricimab (Vabysmo)',
+    record_number_of_injections: 3,
+    record_validity_of_consent: true,
+    record_last3mths_admission: false,
+    record_stroke_heartAtt_last6mths: false,
+    record_taking_antibiotics: false,
+    record_pregnant: false,
+    record_id: 'REC-P001-001',
+    issued: '2020-01-01T00:00:00',
+  },
+}
 
 const MOCK_ACK_RESPONSE = {
   data: {
@@ -135,6 +173,11 @@ describe('ChatWindow — Pre-Procedure flow', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     submitAcknowledgement.mockResolvedValue(MOCK_ACK_RESPONSE)
+    // Existing patient: getPatient + getEpicRecord both resolve → flow enters ask_update
+    getPatient.mockResolvedValue(MOCK_PATIENT_RESPONSE)
+    getEpicRecord.mockResolvedValue(MOCK_EPIC_RECORD_RESPONSE)
+    // No prior submission — getLatestAcknowledgement rejects so the post-op merge skips it
+    getLatestAcknowledgement.mockRejectedValue(new Error('no record'))
   })
 
   it('clicking Fill up pre-procedure shows the Singpass login button', async () => {
@@ -161,7 +204,9 @@ describe('ChatWindow — Pre-Procedure flow', () => {
     render(<ChatWindow />)
     await userEvent.click(screen.getByRole('button', { name: 'Fill up pre-procedure' }))
     await userEvent.click(screen.getByRole('button', { name: /singpass login/i }))
-    await userEvent.click(screen.getByRole('button', { name: 'No' })) // answer q_admission
+    // Existing patient → ask_update; click Yes to advance into the 3-question flow.
+    await userEvent.click(screen.getByRole('button', { name: 'Yes' }))
+    await userEvent.click(screen.getByRole('button', { name: 'No' })) // q_admission
     expect(screen.getByRole('button', { name: 'Yes' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'No' })).toBeInTheDocument()
   })
@@ -170,8 +215,9 @@ describe('ChatWindow — Pre-Procedure flow', () => {
     render(<ChatWindow />)
     await userEvent.click(screen.getByRole('button', { name: 'Fill up pre-procedure' }))
     await userEvent.click(screen.getByRole('button', { name: /singpass login/i }))
-    await userEvent.click(screen.getByRole('button', { name: 'No' })) // q_admission
-    await userEvent.click(screen.getByRole('button', { name: 'No' })) // q_stroke
+    await userEvent.click(screen.getByRole('button', { name: 'Yes' })) // ask_update
+    await userEvent.click(screen.getByRole('button', { name: 'No' }))  // q_admission
+    await userEvent.click(screen.getByRole('button', { name: 'No' }))  // q_stroke
     expect(screen.getByRole('button', { name: 'Right' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Left' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Both' })).toBeInTheDocument()
@@ -181,9 +227,12 @@ describe('ChatWindow — Pre-Procedure flow', () => {
     render(<ChatWindow />)
     await userEvent.click(screen.getByRole('button', { name: 'Fill up pre-procedure' }))
     await userEvent.click(screen.getByRole('button', { name: /singpass login/i }))
-    await userEvent.click(screen.getByRole('button', { name: 'Yes' })) // q_admission = true
-    await userEvent.click(screen.getByRole('button', { name: 'No' }))  // q_stroke = false
-    await userEvent.click(screen.getByRole('button', { name: 'Right' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Yes' }))   // ask_update
+    await userEvent.click(screen.getByRole('button', { name: 'Yes' }))   // q_admission = true
+    await userEvent.click(screen.getByRole('button', { name: 'No' }))    // q_stroke = false
+    await userEvent.click(screen.getByRole('button', { name: 'Right' })) // q_eye
+    await userEvent.click(screen.getByRole('button', { name: 'Yes' }))   // cost_confirm
+    await userEvent.click(screen.getByRole('button', { name: 'Medisave' })) // payment_mode → submit
     await waitFor(() => expect(submitAcknowledgement).toHaveBeenCalledOnce())
     const [payload] = submitAcknowledgement.mock.calls[0]
     expect(payload.patient_record.record_last3mths_admission).toBe(true)
@@ -194,9 +243,12 @@ describe('ChatWindow — Pre-Procedure flow', () => {
     render(<ChatWindow />)
     await userEvent.click(screen.getByRole('button', { name: 'Fill up pre-procedure' }))
     await userEvent.click(screen.getByRole('button', { name: /singpass login/i }))
-    await userEvent.click(screen.getByRole('button', { name: 'No' }))
-    await userEvent.click(screen.getByRole('button', { name: 'No' }))
-    await userEvent.click(screen.getByRole('button', { name: 'Right' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Yes' }))   // ask_update
+    await userEvent.click(screen.getByRole('button', { name: 'No' }))    // q_admission
+    await userEvent.click(screen.getByRole('button', { name: 'No' }))    // q_stroke
+    await userEvent.click(screen.getByRole('button', { name: 'Right' })) // q_eye
+    await userEvent.click(screen.getByRole('button', { name: 'Yes' }))   // cost_confirm
+    await userEvent.click(screen.getByRole('button', { name: 'Medisave' })) // payment_mode → submit
     await waitFor(() => expect(submitAcknowledgement).toHaveBeenCalledOnce())
     const [payload] = submitAcknowledgement.mock.calls[0]
     expect(payload.patient_record.record_eyes).toBe('OD')
@@ -206,9 +258,12 @@ describe('ChatWindow — Pre-Procedure flow', () => {
     render(<ChatWindow />)
     await userEvent.click(screen.getByRole('button', { name: 'Fill up pre-procedure' }))
     await userEvent.click(screen.getByRole('button', { name: /singpass login/i }))
-    await userEvent.click(screen.getByRole('button', { name: 'No' }))
-    await userEvent.click(screen.getByRole('button', { name: 'No' }))
-    await userEvent.click(screen.getByRole('button', { name: 'Left' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Yes' }))   // ask_update
+    await userEvent.click(screen.getByRole('button', { name: 'No' }))    // q_admission
+    await userEvent.click(screen.getByRole('button', { name: 'No' }))    // q_stroke
+    await userEvent.click(screen.getByRole('button', { name: 'Left' }))  // q_eye
+    await userEvent.click(screen.getByRole('button', { name: 'Yes' }))   // cost_confirm
+    await userEvent.click(screen.getByRole('button', { name: 'Medisave' })) // payment_mode → submit
     await waitFor(() => expect(submitAcknowledgement).toHaveBeenCalledOnce())
     const [payload] = submitAcknowledgement.mock.calls[0]
     expect(payload.patient_record.record_eyes).toBe('OS')
@@ -218,9 +273,12 @@ describe('ChatWindow — Pre-Procedure flow', () => {
     render(<ChatWindow />)
     await userEvent.click(screen.getByRole('button', { name: 'Fill up pre-procedure' }))
     await userEvent.click(screen.getByRole('button', { name: /singpass login/i }))
-    await userEvent.click(screen.getByRole('button', { name: 'No' }))
-    await userEvent.click(screen.getByRole('button', { name: 'No' }))
-    await userEvent.click(screen.getByRole('button', { name: 'Both' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Yes' }))   // ask_update
+    await userEvent.click(screen.getByRole('button', { name: 'No' }))    // q_admission
+    await userEvent.click(screen.getByRole('button', { name: 'No' }))    // q_stroke
+    await userEvent.click(screen.getByRole('button', { name: 'Both' }))  // q_eye
+    await userEvent.click(screen.getByRole('button', { name: 'Yes' }))   // cost_confirm
+    await userEvent.click(screen.getByRole('button', { name: 'Medisave' })) // payment_mode → submit
     await waitFor(() => expect(submitAcknowledgement).toHaveBeenCalledOnce())
     const [payload] = submitAcknowledgement.mock.calls[0]
     expect(payload.patient_record.record_eyes).toBe('OU')
@@ -230,9 +288,12 @@ describe('ChatWindow — Pre-Procedure flow', () => {
     render(<ChatWindow />)
     await userEvent.click(screen.getByRole('button', { name: 'Fill up pre-procedure' }))
     await userEvent.click(screen.getByRole('button', { name: /singpass login/i }))
-    await userEvent.click(screen.getByRole('button', { name: 'No' }))
-    await userEvent.click(screen.getByRole('button', { name: 'No' }))
-    await userEvent.click(screen.getByRole('button', { name: 'Right' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Yes' }))   // ask_update
+    await userEvent.click(screen.getByRole('button', { name: 'No' }))    // q_admission
+    await userEvent.click(screen.getByRole('button', { name: 'No' }))    // q_stroke
+    await userEvent.click(screen.getByRole('button', { name: 'Right' })) // q_eye
+    await userEvent.click(screen.getByRole('button', { name: 'Yes' }))   // cost_confirm
+    await userEvent.click(screen.getByRole('button', { name: 'Medisave' })) // payment_mode → submit
     await waitFor(() => {
       expect(screen.getByText(/Financial Counselling & Advice/)).toBeInTheDocument()
     })
@@ -243,9 +304,12 @@ describe('ChatWindow — Pre-Procedure flow', () => {
     render(<ChatWindow />)
     await userEvent.click(screen.getByRole('button', { name: 'Fill up pre-procedure' }))
     await userEvent.click(screen.getByRole('button', { name: /singpass login/i }))
-    await userEvent.click(screen.getByRole('button', { name: 'No' }))
-    await userEvent.click(screen.getByRole('button', { name: 'No' }))
-    await userEvent.click(screen.getByRole('button', { name: 'Right' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Yes' }))   // ask_update
+    await userEvent.click(screen.getByRole('button', { name: 'No' }))    // q_admission
+    await userEvent.click(screen.getByRole('button', { name: 'No' }))    // q_stroke
+    await userEvent.click(screen.getByRole('button', { name: 'Right' })) // q_eye
+    await userEvent.click(screen.getByRole('button', { name: 'Yes' }))   // cost_confirm
+    await userEvent.click(screen.getByRole('button', { name: 'Medisave' })) // payment_mode → submit (rejects)
     await waitFor(() => {
       expect(screen.getByText(/Financial Counselling & Advice/)).toBeInTheDocument()
     })
@@ -255,9 +319,12 @@ describe('ChatWindow — Pre-Procedure flow', () => {
     render(<ChatWindow />)
     await userEvent.click(screen.getByRole('button', { name: 'Fill up pre-procedure' }))
     await userEvent.click(screen.getByRole('button', { name: /singpass login/i }))
-    await userEvent.click(screen.getByRole('button', { name: 'No' }))
-    await userEvent.click(screen.getByRole('button', { name: 'No' }))
-    await userEvent.click(screen.getByRole('button', { name: 'Right' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Yes' }))   // ask_update
+    await userEvent.click(screen.getByRole('button', { name: 'No' }))    // q_admission
+    await userEvent.click(screen.getByRole('button', { name: 'No' }))    // q_stroke
+    await userEvent.click(screen.getByRole('button', { name: 'Right' })) // q_eye
+    await userEvent.click(screen.getByRole('button', { name: 'Yes' }))   // cost_confirm
+    await userEvent.click(screen.getByRole('button', { name: 'Medisave' })) // payment_mode → submit
     await waitFor(() => expect(submitAcknowledgement).toHaveBeenCalled())
     expect(screen.getByRole('textbox')).toBeDisabled()
   })
@@ -269,12 +336,17 @@ describe('ChatWindow — Pre-Procedure input validation', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     submitAcknowledgement.mockResolvedValue(MOCK_ACK_RESPONSE)
+    getPatient.mockResolvedValue(MOCK_PATIENT_RESPONSE)
+    getEpicRecord.mockResolvedValue(MOCK_EPIC_RECORD_RESPONSE)
+    getLatestAcknowledgement.mockRejectedValue(new Error('no record'))
   })
 
   async function reachStep(step) {
     render(<ChatWindow />)
     await userEvent.click(screen.getByRole('button', { name: 'Fill up pre-procedure' }))
     await userEvent.click(screen.getByRole('button', { name: /singpass login/i }))
+    // Existing patient → ask_update; click Yes to enter the 3-question flow.
+    await userEvent.click(screen.getByRole('button', { name: 'Yes' }))
     if (step === 'q_stroke' || step === 'q_eye') {
       await userEvent.click(screen.getByRole('button', { name: 'No' })) // answer q_admission
     }
@@ -349,6 +421,9 @@ describe('ChatWindow — Pre-Procedure input validation', () => {
     await userEvent.keyboard('{Enter}')
     await userEvent.type(screen.getByRole('textbox'), 'right eye')
     await userEvent.keyboard('{Enter}')
+    // q_eye → cost_confirm → payment_mode → submit (added in the cost+payment-mode flow)
+    await userEvent.click(screen.getByRole('button', { name: 'Yes' }))   // cost_confirm
+    await userEvent.click(screen.getByRole('button', { name: 'Medisave' })) // payment_mode → submit
     await waitFor(() => expect(submitAcknowledgement).toHaveBeenCalledOnce())
     const [payload] = submitAcknowledgement.mock.calls[0]
     expect(payload.patient_record.record_eyes).toBe('OD')
@@ -358,7 +433,12 @@ describe('ChatWindow — Pre-Procedure input validation', () => {
 // ─── Post-Operation Checklist ─────────────────────────────────────────────────
 
 describe('ChatWindow — Post-Operation Checklist flow', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+    getPatient.mockResolvedValue(MOCK_PATIENT_RESPONSE)
+    getEpicRecord.mockResolvedValue(MOCK_EPIC_RECORD_RESPONSE)
+    getLatestAcknowledgement.mockRejectedValue(new Error('no record'))
+  })
 
   it('shows the Singpass login button when Fill up post-operation checklist is clicked', async () => {
     render(<ChatWindow />)
@@ -391,11 +471,12 @@ describe('ChatWindow — Post-Operation Checklist flow', () => {
     expect(screen.getByText(/Post Intravitreal Injection/i)).toBeInTheDocument()
   })
 
-  it('shows a thanks message after login', async () => {
+  it('shows a welcome-back message after login', async () => {
+    // For an existing patient the post-op flow greets "Welcome back, {name}. Here is your post-operation checklist."
     render(<ChatWindow />)
     await userEvent.click(screen.getByRole('button', { name: 'Fill up post-operation checklist' }))
     await userEvent.click(screen.getByRole('button', { name: /singpass login/i }))
-    expect(screen.getByText(/Thanks for signing in/i)).toBeInTheDocument()
+    expect(screen.getByText(/Welcome back, Tan Ah Kow/i)).toBeInTheDocument()
   })
 
   it('input is disabled after the checklist is shown', async () => {

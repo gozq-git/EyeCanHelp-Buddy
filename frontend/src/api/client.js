@@ -22,3 +22,12 @@ export const sendChatMessage = (messages) =>
 
 export const simulateSingpassLogin = () =>
   Promise.resolve({ data: { patient_id: 'P001', patient_name: 'Test Patient' } })
+
+export const getPatient = (patientId) =>
+  api.get(`/patient/${patientId}`)
+
+export const createPatient = (data) =>
+  api.post('/patient', data)
+
+export const getLatestAcknowledgement = (patientId) =>
+  api.get(`/acknowledgement/latest/${patientId}`)

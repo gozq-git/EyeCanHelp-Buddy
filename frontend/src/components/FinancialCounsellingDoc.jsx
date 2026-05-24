@@ -42,16 +42,25 @@ export default function FinancialCounsellingDoc({ formData = {} }) {
     date = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
     surgeon = 'Dr. Koh CS',
     mcr = '0001231241',
-    site = 'OD',
     diagnosis = 'H35.31',
     estCost = 123,
     injections = 1,
     paymentMode = 'Medisave',
   } = formData
 
-  const isLeft = site === 'OS' || site === 'OU'
-  const isRight = site === 'OD' || site === 'OU'
-  const isBilat = site === 'OU'
+  // Site must tally with PostOp Eye (LEFT / RIGHT / BOTH). Mutually exclusive: exactly
+  // one box checked. Empty string must fall through to 'OD' (matches PostOp's null fallback
+  // showing nothing-vs-something behaviour symmetrically). Use || not destructuring default.
+  const site = formData.site || 'OD'
+  const isLeft = site === 'OS'
+  const isRight = site === 'OD'
+  const isBoth = site === 'OU'
+
+  // Must mirror PostOpChecklistDoc exactly so the two forms tally.
+  // Use || (not destructuring default) so an empty-string medication still falls through.
+  const medication = formData.medication || 'Faricimab (Vabysmo)'
+  const MED_OPTIONS = ['Lucentis', 'Faricimab', 'Eylea', 'Others']
+  const activeMed = MED_OPTIONS.find(m => medication.toLowerCase().includes(m.toLowerCase())) || 'Others'
 
   return (
     <div style={{
@@ -83,7 +92,7 @@ export default function FinancialCounsellingDoc({ formData = {} }) {
         <strong>Site:</strong>
         <CB checked={isLeft} label="LEFT" />
         <CB checked={isRight} label="RIGHT" />
-        <CB checked={isBilat} label="BILAT" />
+        <CB checked={isBoth} label="BOTH" />
       </FlexRow>
 
       <FlexRow>
@@ -112,9 +121,9 @@ export default function FinancialCounsellingDoc({ formData = {} }) {
       </div>
 
       <div style={{ fontWeight: 700, marginBottom: '3px' }}>Drug:</div>
-      <div style={{ marginBottom: '8px' }}>
-        <CB checked={true} label="Faricimab (Vabysmo) TLU123" />
-      </div>
+      <FlexRow>
+        {MED_OPTIONS.map(m => <CB key={m} checked={m === activeMed} label={m} />)}
+      </FlexRow>
 
       <div style={{ background: '#fff8f8', border: '1px solid #fdd', borderRadius: '4px', padding: '6px', marginBottom: '8px' }}>
         <strong>Est. Hospital Bill: </strong>
@@ -140,9 +149,14 @@ export default function FinancialCounsellingDoc({ formData = {} }) {
 
       <FlexRow>
         <strong>Payment:</strong>
-        {['Medisave', 'Life', 'IP', 'CSC', 'Cash'].map(p => (
-          <CB key={p} checked={p === paymentMode} label={p} />
-        ))}
+        {['Medisave', 'Life', 'IP', 'CSC', 'Cash'].map(p => {
+          // 'NOK Medisave' is operationally a Medisave payment (just paid out of the
+          // next-of-kin's account), so it should tick the same checkbox as 'Medisave'.
+          const checked = p === 'Medisave'
+            ? paymentMode.toLowerCase().includes('medisave')
+            : p === paymentMode
+          return <CB key={p} checked={checked} label={p} />
+        })}
       </FlexRow>
 
       <Line />

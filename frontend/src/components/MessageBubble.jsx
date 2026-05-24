@@ -90,7 +90,7 @@ export default function MessageBubble({ role, type, content, formData, onQuickRe
   if (type === 'postop_doc') {
     return (
       <div style={{ marginBottom: '12px', maxWidth: '620px' }}>
-        <PostOpChecklistDoc />
+        <PostOpChecklistDoc formData={formData} />
       </div>
     )
   }

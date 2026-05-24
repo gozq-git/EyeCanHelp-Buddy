@@ -8,16 +8,16 @@ router = APIRouter(prefix="/epic", tags=["EPIC"])
 
 
 @router.get("/patient/{patient_id}", response_model=PatientSchema)
-def get_patient(patient_id: str):
-    patient = get_patient_from_epic(patient_id)
+async def get_patient(patient_id: str):
+    patient = await get_patient_from_epic(patient_id)
     if patient is None:
         raise HTTPException(status_code=404, detail=f"Patient {patient_id} not found in EPIC")
     return patient
 
 
 @router.get("/patient/{patient_id}/record", response_model=PatientRecordResponse)
-def get_patient_record(patient_id: str):
-    record = get_patient_record_from_epic(patient_id)
+async def get_patient_record(patient_id: str):
+    record = await get_patient_record_from_epic(patient_id)
     if record is None:
         raise HTTPException(status_code=404, detail=f"No EPIC record found for patient {patient_id}")
     return record

@@ -1,65 +1,43 @@
-# UC1: Mocked EPIC patient record lookup
-# In production, this would call the hospital EPIC FHIR R4 API
+# UC1: EPIC patient + record lookup.
+#
+# Originally this was an in-memory dict that pretended to be EPIC. The POC now
+# stores the same canonical records in PostgreSQL (TBL_PATIENT) and MongoDB
+# (TBL_PATIENT_RECORDS), so this service reads from those two stores instead.
+# In production these calls would be replaced by EPIC FHIR R4 API requests; the
+# service boundary is preserved so routers and the frontend's EPIC fallback path
+# do not need to change.
+from sqlalchemy import select
+
+from database.postgres import AsyncSessionLocal
+from database.mongo import get_mongo_db
+from models.patient import Patient
 from schemas.patient import PatientSchema
 from schemas.patient_record import PatientRecordResponse
-from datetime import datetime
-
-MOCK_PATIENTS: dict[str, dict] = {
-    "P001": {
-        "patient_id": "P001",
-        "patient_name": "Tan Ah Kow",
-        "patient_dob": "1952-08-12",
-        "phone_number": "+6591234567",
-    },
-    "P002": {
-        "patient_id": "P002",
-        "patient_name": "Lim Siew Eng",
-        "patient_dob": "1965-03-25",
-        "phone_number": "+6598765432",
-    },
-}
-
-MOCK_RECORDS: dict[str, dict] = {
-    "P001": {
-        "record_id": "REC-P001-001",
-        "patient_id": "P001",
-        "record_name": "Tan Ah Kow",
-        "record_diagnosis": "H35.31",          # AMD (Age-related Macular Degeneration)
-        "record_eyes": "OD",
-        "record_number_of_injections": 3,
-        "record_validity_of_consent": True,
-        "record_last3mths_admission": False,
-        "record_stroke_heartAtt_last6mths": False,
-        "record_taking_antibiotics": False,
-        "record_pregnant": False,
-        "issued": datetime.utcnow(),
-    },
-    "P002": {
-        "record_id": "REC-P002-001",
-        "patient_id": "P002",
-        "record_name": "Lim Siew Eng",
-        "record_diagnosis": "H36.0",           # DME (Diabetic Macular Edema)
-        "record_eyes": "OS",
-        "record_number_of_injections": 1,
-        "record_validity_of_consent": True,
-        "record_last3mths_admission": False,
-        "record_stroke_heartAtt_last6mths": False,
-        "record_taking_antibiotics": True,
-        "record_pregnant": False,
-        "issued": datetime.utcnow(),
-    },
-}
 
 
-def get_patient_from_epic(patient_id: str) -> PatientSchema | None:
-    data = MOCK_PATIENTS.get(patient_id)
-    if data is None:
+async def get_patient_from_epic(patient_id: str) -> PatientSchema | None:
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(select(Patient).where(Patient.patient_id == patient_id))
+        patient = result.scalar_one_or_none()
+    if patient is None:
         return None
-    return PatientSchema(**data)
+    return PatientSchema(
+        patient_id=patient.patient_id,
+        patient_name=patient.patient_name,
+        patient_dob=patient.patient_dob,
+        phone_number=patient.phone_number,
+    )
 
 
-def get_patient_record_from_epic(patient_id: str) -> PatientRecordResponse | None:
-    data = MOCK_RECORDS.get(patient_id)
-    if data is None:
+async def get_patient_record_from_epic(patient_id: str) -> PatientRecordResponse | None:
+    # EPIC returns the canonical seed (record_id = "REC-{patient_id}-001"), NOT the
+    # latest user acknowledgement. Patient-side submissions live in the same Mongo
+    # collection but represent a different concept (consent + medical history each
+    # visit) — those are reached via /acknowledgement/latest/{patient_id}.
+    doc = await get_mongo_db()["TBL_PATIENT_RECORDS"].find_one(
+        {"record_id": f"REC-{patient_id}-001"},
+    )
+    if doc is None:
         return None
-    return PatientRecordResponse(**data)
+    doc.pop("_id", None)
+    return PatientRecordResponse(**doc)

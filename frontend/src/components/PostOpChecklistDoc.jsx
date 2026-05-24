@@ -1,5 +1,19 @@
 import React from 'react'
 
+const DIAGNOSIS_MAP = {
+  'H35.31': 'Age-related macular degeneration',
+  'H36.0':  'Macular edema',
+  'H34.8':  'Other causes of macular degeneration',
+}
+
+const EYE_MAP = { OD: 'Right', OS: 'Left', OU: 'Both' }
+
+const ALL_CONDITIONS = [
+  'Age-related macular degeneration',
+  'Other causes of macular degeneration',
+  'Macular edema',
+]
+
 function CB({ checked, label }) {
   return (
     <label style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11px', pointerEvents: 'none', userSelect: 'none', marginBottom: '3px' }}>
@@ -9,9 +23,18 @@ function CB({ checked, label }) {
   )
 }
 
-const today = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' })
+export default function PostOpChecklistDoc({ formData }) {
+  const diagnosis = formData?.record_diagnosis || 'H35.31'
+  const condition = DIAGNOSIS_MAP[diagnosis] || diagnosis
+  const eye = EYE_MAP[formData?.record_eyes] || null
+  const medication = formData?.record_medication || 'Faricimab (Vabysmo)'
+  const date = formData?.issued
+    ? new Date(formData.issued).toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' })
+    : new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' })
 
-export default function PostOpChecklistDoc() {
+  const MED_OPTIONS = ['Lucentis', 'Faricimab', 'Eylea', 'Others']
+  const activeMed = MED_OPTIONS.find(m => medication.toLowerCase().includes(m.toLowerCase())) || 'Others'
+
   return (
     <div style={{
       border: '1px solid #bbb',
@@ -32,20 +55,27 @@ export default function PostOpChecklistDoc() {
       <div style={{ marginBottom: '10px' }}>
         <strong>You have:</strong>
         <div style={{ marginTop: '4px', paddingLeft: '4px' }}>
-          <CB checked={true} label="Age-related macular degeneration" />
-          <CB checked={false} label="Other causes of macular degeneration" />
-          <CB checked={false} label="Macular edema" />
+          {ALL_CONDITIONS.map(c => (
+            <CB key={c} checked={c === condition} label={c} />
+          ))}
         </div>
       </div>
 
       <div style={{ marginBottom: '10px' }}>
         <strong>You have received an injection into your: Intravitreal</strong>
         <div style={{ marginTop: '4px' }}>
-          Lucentis / <span style={{ textDecoration: 'underline', fontWeight: 600, color: '#1565C0' }}>Faricimab</span> / Eylea / Others
+          {MED_OPTIONS.map((med, i) => (
+            <span key={med}>
+              {i > 0 && ' / '}
+              <span style={med === activeMed ? { textDecoration: 'underline', fontWeight: 600, color: '#1565C0' } : {}}>{med}</span>
+            </span>
+          ))}
         </div>
         <div>
-          <span style={{ textDecoration: 'underline', fontWeight: 600, color: '#1565C0' }}>Right</span> / Left eye on{' '}
-          <span style={{ textDecoration: 'underline', fontWeight: 600, color: '#1565C0' }}>{today}</span>
+          {eye
+            ? <><span style={{ textDecoration: 'underline', fontWeight: 600, color: '#1565C0' }}>{eye}</span>{eye !== 'Both' && ' eye'} on{' '}</>
+            : 'Eye: _____ on '}
+          <span style={{ textDecoration: 'underline', fontWeight: 600, color: '#1565C0' }}>{date}</span>
         </div>
       </div>
 
