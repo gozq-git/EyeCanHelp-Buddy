@@ -22,7 +22,7 @@ export default function App() {
         <OnboardingScreen onContinue={() => setScreen('chat')} />
       )}
       {screen === 'chat' && (
-        <ChatWindow />
+        <ChatWindow onBack={() => setScreen('onboarding')} />
       )}
     </div>
   )
