@@ -60,7 +60,7 @@ const chipBtn = {
   fontFamily: 'inherit',
 }
 
-export default function ChatWindow() {
+export default function ChatWindow({ onBack }) {
   const [mode, setMode] = useState('welcome')
   const [preProcStep, setPreProcStep] = useState('login')
   const [postOpStep, setPostOpStep] = useState('login')
@@ -73,6 +73,9 @@ export default function ChatWindow() {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const bottomRef = useRef(null)
+  const topRef = useRef(null)
+
+  const scrollToTop = () => topRef.current?.scrollIntoView({ behavior: 'smooth' })
 
   useEffect(() => {
     const t = setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 50)
@@ -433,7 +436,7 @@ export default function ChatWindow() {
   const showYesNo = mode === 'pre_procedure' && (preProcStep === 'ask_update' || preProcStep === 'q_admission' || preProcStep === 'q_stroke' || preProcStep === 'cost_confirm')
   const showEye = mode === 'pre_procedure' && preProcStep === 'q_eye'
   const showPaymentMode = mode === 'pre_procedure' && preProcStep === 'payment_mode'
-  const showReturnMenu = (mode === 'pre_procedure' && preProcStep === 'complete') || (mode === 'post_operation' && postOpStep === 'complete')
+  const showReturnMenu = mode === 'general_enquiry' || (mode === 'pre_procedure' && preProcStep === 'complete') || (mode === 'post_operation' && postOpStep === 'complete')
   const inputDisabled = !regStep && (
     (mode === 'pre_procedure' && (preProcStep === 'login' || preProcStep === 'complete'))
     || (mode === 'post_operation' && (postOpStep === 'login' || postOpStep === 'complete'))
@@ -451,7 +454,7 @@ export default function ChatWindow() {
       {/* Header — full-width bg, centred content */}
       <div style={{ background: '#fff', borderBottom: '1px solid #E8E8E8', flexShrink: 0 }}>
         <div style={{ ...centered, display: 'flex', alignItems: 'center', padding: '0 20px', height: '64px', gap: '12px' }}>
-          <button style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: '#555', padding: '4px 8px' }}>
+          <button onClick={onBack} title="Back" style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: '#555', padding: '4px 8px' }}>
             ←
           </button>
           <EyeLogoSVG size={36} />
@@ -460,13 +463,14 @@ export default function ChatWindow() {
             <div style={{ fontSize: '12px', color: '#4CAF50', lineHeight: '1.2' }}>● Online</div>
           </div>
           <button style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: '#888' }}>♪</button>
-          <button style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: '#888' }}>↑</button>
+          <button onClick={scrollToTop} title="Scroll to top" style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: '#888' }}>↑</button>
         </div>
       </div>
 
       {/* Messages — scrollable, centred content */}
       <div style={{ flex: 1, overflowY: 'auto' }}>
         <div style={{ ...centered, padding: '16px 20px' }}>
+          <div ref={topRef} />
           {messages.map(m => (
             <MessageBubble
               key={m.id}

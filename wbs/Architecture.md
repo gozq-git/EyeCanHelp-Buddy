@@ -96,7 +96,7 @@ EyeCanHelp-Buddy/
 │   ├── Dockerfile                     # Node 20-alpine image, npm run dev port 3000
 │   └── src/
 │       ├── main.jsx                   # React root mount
-│       ├── App.jsx                    # Screen state machine (splash→onboard→chat)
+│       ├── App.jsx                    # Screen state machine (splash→onboard→chat); passes onBack to ChatWindow (chat→onboard)
 │       ├── api/
 │       │   └── client.js              # Axios API client (all endpoints + simulateSingpassLogin)
 │       └── components/
@@ -215,12 +215,21 @@ Browser opens http://localhost:3000
          • Fill up pre-procedure
          • Fill up post-operation checklist
          • Return Menu
+
+Chat header navigation (top bar of ChatWindow):
+  • ←  Back     → calls onBack prop → App.jsx resets screen = 'onboarding'
+  • ↑  To-top   → smooth-scrolls the message thread back to the first message
+  • ♪  Sound    → placeholder (no handler yet)
+  • 🎤 Mic      → placeholder (no handler yet)
 ```
 
 ### General Enquiry — LLM Q&A
 ```
 User taps "General Enquiry" pill  →  mode = 'general_enquiry'
   → Bot: "Sure, I can assist to answer general enquiries about eye procedures or surgery."
+  → A "Return Menu" chip is shown above the input bar throughout General Enquiry
+    (showReturnMenu is true for mode === 'general_enquiry'), so the user can reset
+    to the welcome menu at any point without finishing a flow.
 
 User types question (e.g. "What is a cataract?")
   → ChatWindow builds conversation history (text messages only)
