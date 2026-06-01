@@ -1,3 +1,4 @@
+import json
 import os
 import logging
 from typing import Any, Dict, List, Literal, TypedDict
@@ -12,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 class CoordinatorState(TypedDict, total=False):
     prompt: str
-    route: Literal["financial", "healthcare", "generic"]
+    route: Literal["triage", "financial", "healthcare", "escalate"]
     response: str
     kb_query: str
     kb_results: List[Dict[str, Any]]
@@ -35,20 +36,44 @@ Always:
 - End with a short action checklist.
 """
 
-GENERIC_SYSTEM_PROMPT = """You are a helpful assistant.
-Answer general questions clearly and concisely.
+HEALTHCARE_SYSTEM_PROMPT = """You are a Healthcare Specialist Agent.
+You answer user healthcare questions using only retrieved evidence from the medical knowledge base.
 
-If a question is clearly financial-planning specific or healthcare-medical specific,
-do not answer in detail and instead provide a short placeholder indicating handoff.
+Always:
+- Base your answer on the provided KB snippets.
+- Be concise, factual, and safe.
+- If snippets are insufficient, say what is missing and advise seeing a licensed clinician.
+- Do not invent facts that are not present in the snippets.
+- End with a short safety note for urgent symptoms.
+"""
+
+HIGH_RISK_MEDICAL_KEYWORDS = [
+    "pus",
+    "cloudy cornea",
+]
+
+ESCALATION_REVIEW_SYSTEM_PROMPT = """You are a clinical risk screening assistant.
+Determine whether the user message requires immediate escalation to a medical hotline.
+
+Escalate when there are high-risk eye/medical danger signs, including but not limited to:
+- pus/discharge from the eye
+- cloudy cornea
+- sudden vision loss
+- severe eye pain
+- chemical injury or trauma
+- acute worsening after surgery
+
+Return strict JSON with this schema:
+{"escalate": true|false, "reason": "short reason", "detected_terms": ["term1", "term2"]}
+No extra text.
 """
 
 TRIAGE_SYSTEM_PROMPT = """You are a routing assistant.
 Classify the user message into exactly one label:
 - financial: payment, medical cost, medisave.
 - healthcare: symptoms, medical conditions, treatment, medication, clinical questions.
-- generic: everything else.
 
-Return exactly one word: financial OR healthcare OR generic.
+Return exactly one word: financial OR healthcare.
 No punctuation and no extra text.
 """
 
@@ -82,20 +107,71 @@ def _invoke_model(system_prompt: str, user_prompt: str) -> str:
         return f"I could not generate a model response from Bedrock: {str(exc)}"
 
 
-def _llm_triage_node(state: CoordinatorState) -> CoordinatorState:
+def _escalation_route_edge(state: CoordinatorState) -> str:
+    return state.get("route", "triage")
+
+
+def _triage_route_edge(state: CoordinatorState) -> str:
+    return state.get("route", "healthcare")
+
+
+def _parse_escalation_decision(raw: str) -> Dict[str, Any]:
+    try:
+        data = json.loads(raw)
+        if isinstance(data, dict):
+            escalate = bool(data.get("escalate", False))
+            reason = str(data.get("reason", "")).strip()
+            terms = data.get("detected_terms", [])
+            if not isinstance(terms, list):
+                terms = []
+            detected_terms = [str(item).strip() for item in terms if str(item).strip()]
+            return {"escalate": escalate, "reason": reason, "detected_terms": detected_terms}
+    except Exception:
+        pass
+    return {"escalate": False, "reason": "", "detected_terms": []}
+
+
+def _escalate_node(state: CoordinatorState) -> CoordinatorState:
     prompt = state.get("prompt", "")
     user_query = _extract_latest_user_input(prompt)
+    query = user_query or prompt
+
+    keyword_hits = _contains_high_risk_keywords(query)
+    model_raw = _invoke_model(ESCALATION_REVIEW_SYSTEM_PROMPT, query)
+    model_decision = _parse_escalation_decision(model_raw)
+
+    should_escalate = bool(keyword_hits) or bool(model_decision.get("escalate", False))
+    if should_escalate:
+        hotline = os.getenv("MEDICAL_HOTLINE_CONTACT", "your medical hotline")
+        detected = keyword_hits + [
+            term for term in model_decision.get("detected_terms", []) if term not in keyword_hits
+        ]
+        details = f" Detected: {', '.join(detected)}." if detected else ""
+        reason = str(model_decision.get("reason", "")).strip()
+        reason_text = f" Reason: {reason}." if reason else ""
+        return {
+            "route": "escalate",
+            "kb_query": query,
+            "response": (
+                f"Your symptoms may require urgent attention.{details}{reason_text} "
+                f"Please contact {hotline} immediately for medical advice."
+            ),
+        }
+
+    logger.info("Escalation check passed. Proceeding to triage.")
+    return {"route": "triage", "kb_query": query}
+
+
+def _llm_triage_node(state: CoordinatorState) -> CoordinatorState:
+    prompt = state.get("prompt", "")
+    user_query = state.get("kb_query", "") or _extract_latest_user_input(prompt)
     decision = _invoke_model(TRIAGE_SYSTEM_PROMPT, user_query or prompt).strip().lower()
 
-    route: Literal["financial", "healthcare", "generic"]
+    route: Literal["financial", "healthcare"]
     if "financial" in decision:
         route = "financial"
-    elif "healthcare" in decision:
-        route = "healthcare"
-    elif "generic" in decision:
-        route = "generic"
     else:
-        route = "generic"
+        route = "healthcare"
 
     logger.info("Coordinator triage selected route=%s", route)
 
@@ -116,41 +192,53 @@ def _healthcare_node(state: CoordinatorState) -> CoordinatorState:
     if any("error" in item for item in results if isinstance(item, dict)):
         return {"kb_results": results, "response": "No information available."}
 
-    text = format_kb_response(query, results)
-    if not text or "could not find relevant information" in text.lower():
+    kb_context = format_kb_response(query, results)
+    if not kb_context or "could not find relevant information" in kb_context.lower():
         return {"kb_results": results, "response": "No information available."}
 
-    return {"kb_results": results, "response": text}
+    healthcare_prompt = (
+        f"User query:\n{query}\n\n"
+        "Retrieved medical knowledge base evidence:\n"
+        f"{kb_context}\n\n"
+        "Provide the best possible answer grounded only in the retrieved evidence."
+    )
+    answer = _invoke_model(HEALTHCARE_SYSTEM_PROMPT, healthcare_prompt)
+    if not answer.strip():
+        return {"kb_results": results, "response": "No information available."}
+
+    return {"kb_results": results, "response": answer}
 
 
-def _generic_node(state: CoordinatorState) -> CoordinatorState:
-    query = state.get("kb_query", state.get("prompt", ""))
-    return {"response": _invoke_model(GENERIC_SYSTEM_PROMPT, query)}
-
-
-def _route_edge(state: CoordinatorState) -> str:
-    return state.get("route", "generic")
+def _contains_high_risk_keywords(text: str) -> List[str]:
+    normalized = (text or "").lower()
+    return [keyword for keyword in HIGH_RISK_MEDICAL_KEYWORDS if keyword in normalized]
 
 
 def create_agent():
     graph = StateGraph(CoordinatorState)
+    graph.add_node("escalate", _escalate_node)
     graph.add_node("llm_triage", _llm_triage_node)
     graph.add_node("financial", _financial_node)
     graph.add_node("healthcare", _healthcare_node)
-    graph.add_node("generic", _generic_node)
 
-    graph.set_entry_point("llm_triage")
+    graph.set_entry_point("escalate")
+    graph.add_conditional_edges(
+        "escalate",
+        _escalation_route_edge,
+        {
+            "triage": "llm_triage",
+            "escalate": END,
+        },
+    )
     graph.add_conditional_edges(
         "llm_triage",
-        _route_edge,
+        _triage_route_edge,
         {
             "financial": "financial",
             "healthcare": "healthcare",
-            "generic": "generic",
         },
     )
     graph.add_edge("financial", END)
     graph.add_edge("healthcare", END)
-    graph.add_edge("generic", END)
 
     return graph.compile()
