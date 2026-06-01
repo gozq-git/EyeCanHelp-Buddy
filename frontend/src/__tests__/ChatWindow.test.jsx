@@ -503,7 +503,10 @@ describe('ChatWindow — Return Menu', () => {
   it('clicking Return Menu appends a new welcome bubble with quick-reply pills', async () => {
     render(<ChatWindow />)
     await userEvent.click(screen.getByRole('button', { name: 'General Enquiry' }))
-    await userEvent.click(screen.getByRole('button', { name: 'Return Menu' }))
+    // In general_enquiry mode the welcome pill (in the thread) and the suggestion-bar
+    // chip both read "Return Menu"; click the active chip (the last one).
+    const returnMenuButtons = screen.getAllByRole('button', { name: 'Return Menu' })
+    await userEvent.click(returnMenuButtons.at(-1))
     // Two welcome bubbles are now in the thread → at least 2 "General Enquiry" buttons
     expect(screen.getAllByRole('button', { name: 'General Enquiry' }).length).toBeGreaterThanOrEqual(2)
   })
