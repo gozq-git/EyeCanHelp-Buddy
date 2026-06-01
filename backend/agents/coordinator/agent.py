@@ -44,7 +44,8 @@ Always:
 - Be concise, factual, and safe.
 - If snippets are insufficient, say what is missing and advise seeing a licensed clinician.
 - Do not invent facts that are not present in the snippets.
-- Do not mention directly what was retrieved by the KB snippets.
+- If the snippets are relevant, always phrase the answer using the same phrasing as the snippets.
+- If the snippets are not relevant, do not mention directly what was retrieved by the KB snippets.
 - End with a short safety note for urgent symptoms.
 """
 
