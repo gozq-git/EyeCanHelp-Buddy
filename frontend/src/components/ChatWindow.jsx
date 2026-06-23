@@ -110,7 +110,9 @@ export default function ChatWindow({ onBack }) {
       setCurrentPatientId(null)
       setRegStep(null)
       setRegData({ patient_id: '', patient_name: '', patient_dob: '', phone_number: '' })
-      addMsg({ role: 'bot', type: 'welcome', content: '' })
+      // Re-shown welcome bubbles keep the Return Menu pill; the very first one
+      // (INIT_MESSAGES) omits it since you're already at the menu.
+      addMsg({ role: 'bot', type: 'welcome', content: '', includeReturnMenu: true })
     }
   }
 
@@ -478,6 +480,7 @@ export default function ChatWindow({ onBack }) {
               type={m.type}
               content={m.content}
               formData={m.formData}
+              includeReturnMenu={m.includeReturnMenu}
               onQuickReply={handleQuickReply}
               onSingpassLogin={handleSingpassLogin}
             />

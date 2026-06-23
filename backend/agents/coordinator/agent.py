@@ -1,53 +1,31 @@
-import json
-import os
-import logging
-from typing import Any, Dict, List, Literal, TypedDict
+"""Coordinator — the microkernel core of the Plug-in pattern.
 
-import boto3
+This module is deliberately minimal and stable. It owns only:
+  1. ``escalate``    — an always-on clinical safety gate (never a plug-in).
+  2. ``llm_triage``  — routes to a specialist by name, using a prompt built
+                       dynamically from the registered plug-ins' descriptions.
+  3. graph assembly  — wires one node per registered :class:`Specialist`.
+
+Specialists themselves live in the ``specialists/`` package and are discovered
+at import time. Adding/removing a specialist requires NO change to this file.
+"""
+import json
+import logging
+import os
+from typing import Any, Dict, List
+
 from langgraph.graph import END, StateGraph
 
-from tools.kb_tools import format_kb_response, search_medical_kb
+import specialists  # noqa: F401 — importing the package runs plug-in discovery
+from llm import extract_latest_user_input, invoke_model
+from specialists.base import CoordinatorState
+from specialists.registry import get_specialists
 
 logger = logging.getLogger(__name__)
 
-
-class CoordinatorState(TypedDict, total=False):
-    prompt: str
-    route: Literal["triage", "financial", "healthcare", "escalate"]
-    response: str
-    kb_query: str
-    kb_results: List[Dict[str, Any]]
-
-
-FINANCIAL_SYSTEM_PROMPT = """You are a Financial Specialist Agent.
-Provide practical, conservative, and well-structured financial guidance.
-
-Focus areas:
-- Budgeting and expense planning
-- Debt payoff strategies
-- Emergency fund and savings planning
-- Investment basics and portfolio allocation education
-- Insurance and tax planning considerations
-
-Always:
-- State assumptions when data is missing.
-- Highlight risks and tradeoffs.
-- Avoid guaranteeing returns.
-- End with a short action checklist.
-"""
-
-HEALTHCARE_SYSTEM_PROMPT = """You are a Healthcare Specialist Agent.
-You answer user healthcare questions using only retrieved information from the medical knowledge base.
-
-Always:
-- Base your answer on the provided KB snippets.
-- Be concise, factual, and safe.
-- If snippets are insufficient, say what is missing and advise seeing a licensed clinician.
-- Do not invent facts that are not present in the snippets.
-- If the snippets are relevant, always phrase the answer using the same phrasing as the snippets.
-- If the snippets are not relevant, do not mention directly what was retrieved by the KB snippets.
-- End with a short safety note for urgent symptoms.
-"""
+# Fallback route when triage is unclear. Prefer "healthcare" (RAG-grounded and
+# safest default); otherwise fall back to whatever plug-in registered first.
+_DEFAULT_ROUTE = "healthcare"
 
 HIGH_RISK_MEDICAL_KEYWORDS = [
     "pus",
@@ -70,51 +48,23 @@ Return strict JSON with this schema:
 No extra text.
 """
 
-TRIAGE_SYSTEM_PROMPT = """You are a routing assistant.
-Classify the user message into exactly one label:
-- financial: payment, medical cost, medisave.
-- healthcare: symptoms, medical conditions, treatment, medication, clinical questions.
 
-Return exactly one word: financial OR healthcare.
-No punctuation and no extra text.
-"""
-
-def _extract_latest_user_input(prompt: str) -> str:
-    lines = [line.strip() for line in (prompt or "").splitlines() if line.strip()]
-    for line in reversed(lines):
-        if line.upper().startswith("USER:"):
-            return line[5:].strip()
-    return (prompt or "").strip()
+def _build_triage_prompt(specs) -> str:
+    """Construct the triage system prompt from the registered plug-ins."""
+    catalogue = "\n".join(f"- {s.name}: {s.description}" for s in specs)
+    labels = " OR ".join(s.name for s in specs)
+    return (
+        "You are a routing assistant.\n"
+        "Classify the user message into exactly one label:\n"
+        f"{catalogue}\n\n"
+        f"Return exactly one word: {labels}.\n"
+        "No punctuation and no extra text.\n"
+    )
 
 
-def _invoke_model(system_prompt: str, user_prompt: str) -> str:
-    model_name = os.getenv("BEDROCK_MODEL_ID", "global.anthropic.claude-sonnet-4-5-20250929-v1:0")
-    region = os.getenv("AWS_REGION") or os.getenv("AWS_DEFAULT_REGION") or "us-east-1"
-    temperature = float(os.getenv("BEDROCK_TEMPERATURE", "0.2"))
-
-    try:
-        client = boto3.client("bedrock-runtime", region_name=region)
-        response = client.converse(
-            modelId=model_name,
-            system=[{"text": system_prompt}],
-            messages=[{"role": "user", "content": [{"text": user_prompt}]}],
-            inferenceConfig={"temperature": temperature},
-        )
-
-        output = response.get("output", {}).get("message", {}).get("content", [])
-        text_parts = [str(item.get("text", "")).strip() for item in output if isinstance(item, dict)]
-        text = "\n".join(part for part in text_parts if part)
-        return text or "No response returned from Bedrock model."
-    except Exception as exc:
-        return f"I could not generate a model response from Bedrock: {str(exc)}"
-
-
-def _escalation_route_edge(state: CoordinatorState) -> str:
-    return state.get("route", "triage")
-
-
-def _triage_route_edge(state: CoordinatorState) -> str:
-    return state.get("route", "healthcare")
+def _contains_high_risk_keywords(text: str) -> List[str]:
+    normalized = (text or "").lower()
+    return [keyword for keyword in HIGH_RISK_MEDICAL_KEYWORDS if keyword in normalized]
 
 
 def _parse_escalation_decision(raw: str) -> Dict[str, Any]:
@@ -135,11 +85,11 @@ def _parse_escalation_decision(raw: str) -> Dict[str, Any]:
 
 def _escalate_node(state: CoordinatorState) -> CoordinatorState:
     prompt = state.get("prompt", "")
-    user_query = _extract_latest_user_input(prompt)
+    user_query = extract_latest_user_input(prompt)
     query = user_query or prompt
 
     keyword_hits = _contains_high_risk_keywords(query)
-    model_raw = _invoke_model(ESCALATION_REVIEW_SYSTEM_PROMPT, query)
+    model_raw = invoke_model(ESCALATION_REVIEW_SYSTEM_PROMPT, query)
     model_decision = _parse_escalation_decision(model_raw)
 
     should_escalate = bool(keyword_hits) or bool(model_decision.get("escalate", False))
@@ -164,83 +114,60 @@ def _escalate_node(state: CoordinatorState) -> CoordinatorState:
     return {"route": "triage", "kb_query": query}
 
 
-def _llm_triage_node(state: CoordinatorState) -> CoordinatorState:
-    prompt = state.get("prompt", "")
-    user_query = state.get("kb_query", "") or _extract_latest_user_input(prompt)
-    decision = _invoke_model(TRIAGE_SYSTEM_PROMPT, user_query or prompt).strip().lower()
-
-    route: Literal["financial", "healthcare"]
-    if "financial" in decision:
-        route = "financial"
+def _make_triage_node(specs):
+    triage_prompt = _build_triage_prompt(specs)
+    valid = {s.name for s in specs}
+    if _DEFAULT_ROUTE in valid:
+        default = _DEFAULT_ROUTE
+    elif specs:
+        default = specs[0].name
     else:
-        route = "healthcare"
+        default = _DEFAULT_ROUTE
 
-    logger.info("Coordinator triage selected route=%s", route)
+    def _llm_triage_node(state: CoordinatorState) -> CoordinatorState:
+        prompt = state.get("prompt", "")
+        user_query = state.get("kb_query", "") or extract_latest_user_input(prompt)
+        decision = invoke_model(triage_prompt, user_query or prompt).strip().lower()
 
-    return {"route": route, "kb_query": user_query or prompt}
+        route = next((name for name in valid if name in decision), default)
+        logger.info("Coordinator triage selected route=%s", route)
+        return {"route": route, "kb_query": user_query or prompt}
 
-
-def _financial_node(state: CoordinatorState) -> CoordinatorState:
-    query = state.get("kb_query", state.get("prompt", ""))
-    return {"response": _invoke_model(FINANCIAL_SYSTEM_PROMPT, query)}
-
-
-def _healthcare_node(state: CoordinatorState) -> CoordinatorState:
-    query = state.get("kb_query", state.get("prompt", ""))
-    results = search_medical_kb(query)
-    if not results:
-        return {"kb_results": [], "response": "No information available."}
-
-    if any("error" in item for item in results if isinstance(item, dict)):
-        return {"kb_results": results, "response": "No information available."}
-
-    kb_context = format_kb_response(query, results)
-    if not kb_context or "could not find relevant information" in kb_context.lower():
-        return {"kb_results": results, "response": "No information available."}
-
-    healthcare_prompt = (
-        f"User query:\n{query}\n\n"
-        "Retrieved medical knowledge base evidence:\n"
-        f"{kb_context}\n\n"
-        "Provide the best possible answer grounded only in the retrieved evidence."
-    )
-    answer = _invoke_model(HEALTHCARE_SYSTEM_PROMPT, healthcare_prompt)
-    if not answer.strip():
-        return {"kb_results": results, "response": "No information available."}
-
-    return {"kb_results": results, "response": answer}
+    return _llm_triage_node
 
 
-def _contains_high_risk_keywords(text: str) -> List[str]:
-    normalized = (text or "").lower()
-    return [keyword for keyword in HIGH_RISK_MEDICAL_KEYWORDS if keyword in normalized]
+def _escalation_route_edge(state: CoordinatorState) -> str:
+    return state.get("route", "triage")
+
+
+def _triage_route_edge(state: CoordinatorState) -> str:
+    return state.get("route", _DEFAULT_ROUTE)
 
 
 def create_agent():
+    specs = get_specialists()
+    if not specs:
+        raise RuntimeError("No specialist plug-ins registered — check the specialists/ package.")
+
     graph = StateGraph(CoordinatorState)
     graph.add_node("escalate", _escalate_node)
-    graph.add_node("llm_triage", _llm_triage_node)
-    graph.add_node("financial", _financial_node)
-    graph.add_node("healthcare", _healthcare_node)
+    graph.add_node("llm_triage", _make_triage_node(specs))
+
+    # One node per plug-in — the core does not name them explicitly.
+    for spec in specs:
+        graph.add_node(spec.name, spec.handle)
+        graph.add_edge(spec.name, END)
 
     graph.set_entry_point("escalate")
     graph.add_conditional_edges(
         "escalate",
         _escalation_route_edge,
-        {
-            "triage": "llm_triage",
-            "escalate": END,
-        },
+        {"triage": "llm_triage", "escalate": END},
     )
     graph.add_conditional_edges(
         "llm_triage",
         _triage_route_edge,
-        {
-            "financial": "financial",
-            "healthcare": "healthcare",
-        },
+        {spec.name: spec.name for spec in specs},
     )
-    graph.add_edge("financial", END)
-    graph.add_edge("healthcare", END)
 
     return graph.compile()

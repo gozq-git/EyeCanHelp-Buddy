@@ -12,6 +12,9 @@ venv/
 frontend/node_modules/
 frontend/dist/
 frontend/.vite/
+e2e/node_modules/
+e2e/test-results/
+e2e/playwright-report/
 
 # Environment
 .env
@@ -21,3 +24,13 @@ frontend/.vite/
 .DS_Store
 *.log
 .pytest_cache/
+
+# Test coverage
+.coverage
+htmlcov/
+
+# Generated test artifacts — keep the folder scaffolding, ignore the reports.
+/reports/*
+!/reports/index.html
+!/reports/nginx.conf
+!/reports/.gitkeep

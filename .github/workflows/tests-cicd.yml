@@ -1,0 +1,117 @@
+name: Tests and Artifacts
+
+# Runs the full test pyramid (unit, integration, E2E, load) and publishes every
+# HTML report as a downloadable workflow artifact. Does not deploy anything.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  backend-tests:
+    name: Backend unit + integration (pytest)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install -r requirements.txt -r requirements-dev.txt
+      - name: Run pytest with coverage
+        run: |
+          python -m pytest \
+            --cov=services --cov=routers --cov=schemas --cov=models --cov=database \
+            --cov-report=term-missing \
+            --cov-report=html:../reports/backend/coverage \
+            --html=../reports/backend/report.html --self-contained-html
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: backend-report
+          path: reports/backend
+
+  frontend-tests:
+    name: Frontend component tests (vitest)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run test:coverage
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: frontend-coverage
+          path: reports/frontend
+
+  e2e-tests:
+    name: End-to-end (Playwright)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install frontend deps
+        working-directory: frontend
+        run: npm ci
+      - name: Install E2E deps + browser
+        working-directory: e2e
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+      - name: Run Playwright (starts Vite via webServer)
+        working-directory: e2e
+        run: npx playwright test
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-report
+          path: reports/e2e
+
+  load-test:
+    name: Stress / load (Locust)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install -r requirements.txt -r requirements-dev.txt
+      - name: Start backend
+        run: |
+          MONGO_URL="mongodb://localhost:27017/?serverSelectionTimeoutMS=500" \
+            python -m uvicorn main:app --host 127.0.0.1 --port 8000 &
+          for _ in $(seq 1 30); do curl -sf http://127.0.0.1:8000/ && break; sleep 1; done
+      - name: Run Locust (headless)
+        run: |
+          mkdir -p ../reports/load
+          python -m locust -f tests/load/locustfile.py \
+            --host http://127.0.0.1:8000 \
+            --headless -u 50 -r 10 -t 30s \
+            --html ../reports/load/report.html
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: load-report
+          path: reports/load
