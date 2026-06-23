@@ -1,0 +1,14 @@
+{
+  "name": "eyecanhelpbuddy-e2e",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "End-to-end tests (Playwright) driving the real frontend UI with the backend API network-mocked.",
+  "scripts": {
+    "test": "playwright test",
+    "report": "playwright show-report ../reports/e2e"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.49.1"
+  }
+}

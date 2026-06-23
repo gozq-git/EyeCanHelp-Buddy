@@ -1,0 +1,8 @@
+# Test & QA dependencies (not installed in the production image).
+# Install with: pip install -r requirements.txt -r requirements-dev.txt
+pytest==8.3.4
+pytest-asyncio==0.25.2
+pytest-cov==6.0.0
+pytest-html==4.1.1
+aiosqlite==0.20.0      # in-memory SQLAlchemy engine for integration tests
+locust==2.32.5         # stress / load testing

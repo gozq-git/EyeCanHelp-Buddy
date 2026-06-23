@@ -4,11 +4,16 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import MessageBubble from '../components/MessageBubble'
 
 describe('MessageBubble — welcome type', () => {
-  it('renders all 4 quick-reply option buttons', () => {
+  it('renders the 3 quick-reply option buttons by default, without Return Menu', () => {
     render(<MessageBubble role="bot" type="welcome" content="" onQuickReply={() => {}} />)
     expect(screen.getByRole('button', { name: 'General Enquiry' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Fill up pre-procedure' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Fill up post-operation checklist' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Return Menu' })).not.toBeInTheDocument()
+  })
+
+  it('renders the Return Menu pill when includeReturnMenu is set', () => {
+    render(<MessageBubble role="bot" type="welcome" content="" includeReturnMenu onQuickReply={() => {}} />)
     expect(screen.getByRole('button', { name: 'Return Menu' })).toBeInTheDocument()
   })
 
@@ -21,7 +26,7 @@ describe('MessageBubble — welcome type', () => {
 
   it('passes the correct label for each quick-reply option', async () => {
     const onQuickReply = vi.fn()
-    render(<MessageBubble role="bot" type="welcome" content="" onQuickReply={onQuickReply} />)
+    render(<MessageBubble role="bot" type="welcome" content="" includeReturnMenu onQuickReply={onQuickReply} />)
     for (const label of ['Fill up pre-procedure', 'Fill up post-operation checklist', 'Return Menu']) {
       await userEvent.click(screen.getByRole('button', { name: label }))
       expect(onQuickReply).toHaveBeenCalledWith(label)

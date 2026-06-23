@@ -1,3 +1,4 @@
+
 # EyeCanHelp Buddy — System Architecture
 
 ## Overview
@@ -5,6 +6,54 @@
 EyeCanHelp Buddy is a two-tier web application consisting of a React frontend (nurse/patient chatbot UI) and a FastAPI backend (LLM orchestration, EPIC integration, database persistence). The system assists IVT clinic nurses at a Singapore hospital to validate patient records, collect patient acknowledgements, and triage post-injection symptoms.
 
 The backend also includes a multi-agent system (AWS Bedrock AgentCore) with a coordinator that routes to specialist financial and healthcare agents.
+
+---
+
+## Design Patterns
+
+The system deliberately applies three patterns. Each is summarised here and detailed in the sections referenced.
+
+### 1. Facade Pattern (structural)
+
+A facade exposes a simple, stable interface over a complex or volatile subsystem.
+
+| Facade | File | Hides |
+|--------|------|-------|
+| **EPIC service** (primary) | `backend/services/epic_service.py` | That "EPIC" is two stores — PostgreSQL `TBL_PATIENT` + MongoDB `TBL_PATIENT_RECORDS`. Callers use `get_patient_from_epic()` / `get_patient_record_from_epic()` and never touch SQLAlchemy or Motor. Swapping to the real EPIC FHIR R4 API changes only this file. |
+| **LLM service** | `backend/services/llm_service.py` | AgentCore invocation detail — ARN region parsing, boto3 client, payload encoding, event-stream vs JSON response parsing. Caller just calls `chat(messages)`. |
+| **API client** | `frontend/src/api/client.js` | axios setup, `baseURL`, headers, endpoint paths. Components call `getEpicPatient()`, `submitAcknowledgement()`, etc. |
+
+### 2. Microkernel (Plug-in) Pattern (architectural)
+
+The coordinator is a **minimal, stable core** that knows nothing about individual specialists; each specialist is a self-contained **plug-in** discovered at startup.
+
+- **Core (microkernel):** `backend/agents/coordinator/agent.py` — owns only the escalation safety gate, triage routing, and graph assembly. It builds the graph by *iterating the registry*; it never names a specialist explicitly.
+- **Plug-in contract:** `specialists/base.py` — `Specialist` (`name`, `description`, `handle(state)`).
+- **Registry:** `specialists/registry.py` — `@register` decorator + `get_specialists()`.
+- **Discovery:** `specialists/__init__.py` — `pkgutil` imports every module in the package, so each plug-in's `register(...)` runs automatically.
+- **Plug-ins:** `specialists/financial.py`, `specialists/healthcare.py`.
+
+> **Extensibility guarantee:** adding a specialist = drop a `<name>.py` into `specialists/` that subclasses `Specialist` and `@register`s. A new graph node, a new triage label (from its `description`), and a new conditional edge are wired automatically. **The core (`agent.py`) is never edited.** The triage prompt is built dynamically from the registered plug-ins' descriptions.
+
+### 3. Behavioral Pattern — LangGraph Orchestrator (behavioral)
+
+Runtime control flow is data-driven by `CoordinatorState`, a behavioral (State/Strategy-style) orchestration via a LangGraph `StateGraph`:
+
+```
+escalate ──(escalate)──▶ END                       # urgent → hotline reply
+   └──────(triage)─────▶ llm_triage ──(financial)─▶ financial ─▶ END
+                                  └───(healthcare)─▶ healthcare ─▶ END
+```
+
+Conditional edges (`_escalation_route_edge`, `_triage_route_edge`) select the next node from state at runtime. See **Multi-Agent System — AWS Bedrock AgentCore** below for the full node-by-node flow.
+
+### Ownership (3-person team)
+
+| Person | Role | Owns (patterns) |
+|--------|------|-----------------|
+| Person 1 | Figma & Requirements | Keeps this document in sync with the code |
+| Person 2 | Frontend & Backend CRUD (Application Assembler) | **Facade** — `api/client.js`, thin routers over services |
+| Person 3 | AI & Infrastructure Engineer | **Microkernel** (`specialists/`) + **LangGraph Orchestrator** (`agent.py`) |
 
 ---
 
@@ -58,22 +107,29 @@ The backend also includes a multi-agent system (AWS Bedrock AgentCore) with a co
   ─ ─ ─ ─ ─ ─ ─ ─ ─  Separate System (AWS Bedrock AgentCore)  ─ ─ ─ ─ ─ ─
 
                     ┌──────────────────────────────────────────────────────────┐
-                    │            Coordinator Agent  (port 8080)                │
+                    │       Coordinator Agent  (microkernel · port 8080)       │
                     │                                                          │
                     │   LangGraph StateGraph (in-process — no cross-runtime)   │
                     │                                                          │
                     │   ┌────────────────────────────────────────────────┐     │
-                    │   │  llm_triage  (Bedrock converse — TRIAGE_PROMPT)│     │
-                    │   └─────────┬───────────────┬───────────────┬──────┘     │
-                    │             │               │               │            │
-                    │      ┌──────▼──────┐ ┌──────▼───────┐ ┌─────▼──────┐     │
-                    │      │  financial  │ │  healthcare  │ │  generic   │     │
-                    │      │  Bedrock    │ │  KB RAG only │ │  Bedrock   │     │
-                    │      │  converse   │ │  (no model)  │ │  converse  │     │
-                    │      └──────┬──────┘ └──────┬───────┘ └─────┬──────┘     │
-                    │             └───────────────┴───────────────┘            │
-                    │                             │  END                       │
-                    └─────────────────────────────┼────────────────────────────┘
+                    │   │  escalate  (entry · clinical safety gate)      │     │
+                    │   │  keywords + Bedrock ESCALATION_REVIEW_PROMPT   │     │
+                    │   └──────────┬──────────────────────────┬──────────┘     │
+                    │   escalate → END                  triage │                │
+                    │   (urgent hotline reply)                 ▼                │
+                    │   ┌────────────────────────────────────────────────┐     │
+                    │   │  llm_triage  (Bedrock converse — TRIAGE_PROMPT │     │
+                    │   │  built dynamically from plug-in descriptions)  │     │
+                    │   └───────────────┬──────────────┬───────────────┘       │
+                    │                   │              │                        │
+                    │            ┌──────▼──────┐ ┌─────▼────────┐               │
+                    │            │  financial  │ │  healthcare  │  ← Specialist │
+                    │            │  Bedrock    │ │  KB RAG +    │    plug-ins   │
+                    │            │  converse   │ │  Bedrock     │  (registry-   │
+                    │            └──────┬──────┘ └─────┬────────┘    driven)    │
+                    │                   └─────────────┘                         │
+                    │                          │  END                          │
+                    └──────────────────────────┼─────────────────────────────┘
                                                   │  KB lookups only
                                                   ▼
                     ┌──────────────────────────────────────────────────────────┐
@@ -157,7 +213,15 @@ EyeCanHelp-Buddy/
 │   ├── agents/                        # AWS Bedrock AgentCore multi-agent system
 │   │   └── coordinator/               # Single in-process orchestrator (port 8080)
 │   │       ├── main.py               # AgentCore entrypoint — invokes the workflow
-│   │       ├── agent.py              # LangGraph StateGraph: triage → financial / healthcare / generic node
+│   │       ├── agent.py              # Microkernel CORE: escalate → triage → <plug-in> node;
+│   │       │                         #   builds the graph by iterating the specialist registry
+│   │       ├── llm.py                # Shared Bedrock converse helper (invoke_model) + transcript parsing
+│   │       ├── specialists/          # Microkernel PLUG-INS (auto-discovered at import)
+│   │       │   ├── __init__.py       # pkgutil discovery — imports every plug-in module
+│   │       │   ├── base.py           # Specialist contract + CoordinatorState
+│   │       │   ├── registry.py       # @register decorator + get_specialists()
+│   │       │   ├── financial.py      # FinancialSpecialist  (Bedrock converse)
+│   │       │   └── healthcare.py     # HealthcareSpecialist (KB RAG + Bedrock)
 │   │       ├── tools/
 │   │       │   └── kb_tools.py       # search_medical_kb + format_kb_response (AWS KB RAG)
 │   │       ├── Dockerfile
@@ -418,34 +482,42 @@ General Enquiry text  →  POST /chat  →  llm_service.py
               payload = JSON({ "prompt": transcript })
          )
 
-  → Coordinator runtime invokes a LangGraph StateGraph (compiled once at startup):
+  → Coordinator runtime invokes a LangGraph StateGraph (compiled once at startup
+    by create_agent(), which assembles the graph from the specialist registry):
 
-       1. llm_triage  (entry node)
-          Reads the latest USER: ... line from the transcript and asks
-          Bedrock converse(modelId=BEDROCK_MODEL_ID) with TRIAGE_SYSTEM_PROMPT
-          to classify the query into one of three labels:
+       1. escalate  (entry node — always-on clinical safety gate)
+          Reads the latest USER: ... line and runs a two-part check:
+            • keyword scan (HIGH_RISK_MEDICAL_KEYWORDS, e.g. "pus", "cloudy cornea")
+            • Bedrock converse(ESCALATION_REVIEW_SYSTEM_PROMPT) → strict-JSON
+              { escalate, reason, detected_terms }
+          If EITHER fires → route = "escalate": returns an urgent-hotline message
+          and goes straight to END (no triage, no specialist).
+          Otherwise → route = "triage", proceeds to llm_triage.
+
+       2. llm_triage
+          Asks Bedrock converse(modelId=BEDROCK_MODEL_ID) with a TRIAGE prompt
+          that is BUILT DYNAMICALLY from each registered plug-in's `description`,
+          classifying the query into exactly one registered label:
             • "financial"   — payment / Medisave / costs
             • "healthcare"  — symptoms, conditions, treatment, medication
-            • "generic"     — everything else (default if unclear)
-          Stores { route, kb_query } on CoordinatorState.
+          Unclear → defaults to "healthcare". Stores { route, kb_query }.
+          (Adding a plug-in adds its label here automatically — no prompt edit.)
 
-       2. Conditional edge routes to one of three terminal nodes:
+       3. Conditional edge routes to the matching specialist plug-in node:
 
-          financial_node   → Bedrock converse(FINANCIAL_SYSTEM_PROMPT, kb_query)
-                             → assistant-written, conservative financial guidance.
+          financial   → Bedrock converse(FINANCIAL_SYSTEM_PROMPT, kb_query)
+                        → conservative financial guidance.
+                        (specialists/financial.py)
 
-          healthcare_node  → search_medical_kb(kb_query) hits
-                             bedrock-agent-runtime.retrieve(AWS_KNOWLEDGE_BASE_ID,
-                             AWS_KB_REGION) → format_kb_response() picks top-3
-                             snippets. No model call — pure RAG from TTSH Library.
-                             Returns "No information available." when the KB is
-                             empty / errored / has no relevant matches.
+          healthcare  → search_medical_kb(kb_query) hits
+                        bedrock-agent-runtime.retrieve(AWS_KNOWLEDGE_BASE_ID,
+                        AWS_KB_REGION) → format_kb_response() picks top-3 snippets,
+                        then Bedrock converse(HEALTHCARE_SYSTEM_PROMPT) grounds the
+                        answer in those snippets. Returns "No information available."
+                        when the KB is empty / errored / has no relevant matches.
+                        (specialists/healthcare.py)
 
-          generic_node     → Bedrock converse(GENERIC_SYSTEM_PROMPT, kb_query).
-                             Concise general-purpose response; redirects clearly
-                             financial / healthcare follow-ups.
-
-       3. All three nodes write their text into state["response"] and go to END.
+       4. The escalate gate or the selected plug-in writes state["response"] → END.
 
   → main.py's @app.entrypoint reads response["response"] → returns
     { status, agent: "coordinator", response: text }
@@ -535,7 +607,7 @@ All Pydantic schemas carry a `resourceType` field matching FHIR R4 resource name
 | ORM | SQLAlchemy 2 (async) | PostgreSQL async via asyncpg |
 | MongoDB driver | Motor (async) | Non-blocking document storage |
 | LLM | AWS Bedrock AgentCore | Coordinator routes to Financial / Healthcare agents; `anthropic==0.49.0` installed but not imported |
-| Multi-agent | AWS Bedrock AgentCore + LangGraph | Single coordinator runtime; LangGraph StateGraph routes in-process to financial / healthcare / generic nodes (no cross-runtime ARN calls) |
+| Multi-agent | AWS Bedrock AgentCore + LangGraph | Single coordinator runtime; LangGraph StateGraph: escalate → triage → financial / healthcare specialist plug-ins (no cross-runtime ARN calls). Specialists are auto-discovered from `specialists/` (microkernel) |
 | AWS SDK | boto3 1.39.0 | Bedrock runtime invocation |
 | Containerization | Docker | One Dockerfile per agent runtime |
 | CI/CD | GitHub Actions → AWS ECR | Automated build + push |

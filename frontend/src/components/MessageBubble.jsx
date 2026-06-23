@@ -8,10 +8,14 @@ const QUICK_REPLY_OPTIONS = [
   'General Enquiry',
   'Fill up pre-procedure',
   'Fill up post-operation checklist',
-  'Return Menu',
 ]
 
-function WelcomeContent({ onQuickReply }) {
+// 'Return Menu' is redundant on the first welcome bubble (you're already at the
+// menu), so it's only shown on welcome bubbles re-appended later in a session.
+function WelcomeContent({ onQuickReply, includeReturnMenu }) {
+  const options = includeReturnMenu
+    ? [...QUICK_REPLY_OPTIONS, 'Return Menu']
+    : QUICK_REPLY_OPTIONS
   return (
     <div style={{ padding: '8px 4px', maxWidth: '480px', margin: '0 auto' }}>
       <div style={{ textAlign: 'center', fontSize: '22px', marginBottom: '8px' }}>✏️</div>
@@ -25,7 +29,7 @@ function WelcomeContent({ onQuickReply }) {
         I can assist with the following:
       </p>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-        {QUICK_REPLY_OPTIONS.map(option => (
+        {options.map(option => (
           <button
             key={option}
             onClick={() => onQuickReply(option)}
@@ -49,13 +53,13 @@ function WelcomeContent({ onQuickReply }) {
   )
 }
 
-export default function MessageBubble({ role, type, content, formData, onQuickReply, onSingpassLogin }) {
+export default function MessageBubble({ role, type, content, formData, onQuickReply, onSingpassLogin, includeReturnMenu }) {
   const isUser = role === 'user'
 
   if (type === 'welcome') {
     return (
       <div style={{ marginBottom: '16px' }}>
-        <WelcomeContent onQuickReply={onQuickReply} />
+        <WelcomeContent onQuickReply={onQuickReply} includeReturnMenu={includeReturnMenu} />
       </div>
     )
   }

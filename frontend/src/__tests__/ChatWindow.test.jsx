@@ -79,12 +79,13 @@ const MOCK_ACK_RESPONSE = {
 describe('ChatWindow — welcome state', () => {
   beforeEach(() => { vi.clearAllMocks() })
 
-  it('renders the four quick-reply option pills on load', () => {
+  it('renders the three quick-reply option pills on load (no Return Menu)', () => {
     render(<ChatWindow />)
     expect(screen.getByRole('button', { name: 'General Enquiry' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Fill up pre-procedure' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Fill up post-operation checklist' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Return Menu' })).toBeInTheDocument()
+    // Return Menu is redundant on the first welcome bubble — you're already at the menu.
+    expect(screen.queryByRole('button', { name: 'Return Menu' })).not.toBeInTheDocument()
   })
 
   it('shows "General Enquiry" as the input placeholder in welcome mode', () => {
