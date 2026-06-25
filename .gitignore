@@ -34,3 +34,4 @@ htmlcov/
 !/reports/index.html
 !/reports/nginx.conf
 !/reports/.gitkeep
+/generated-reports/*
