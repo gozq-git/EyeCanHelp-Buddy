@@ -21,8 +21,8 @@ jobs:
       run:
         working-directory: backend
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - name: Install dependencies
@@ -36,12 +36,12 @@ jobs:
             --cov-report=html:../reports/backend/coverage \
             --html=../reports/backend/report.html --self-contained-html
       - name: Upload pytest coverage for SonarQube
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         if: always()
         with:
           name: backend-coverage
           path: backend/coverage.xml
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         if: always()
         with:
           name: backend-report
@@ -53,7 +53,7 @@ jobs:
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
       - name: Validate Sonar token
@@ -67,7 +67,7 @@ jobs:
             exit 1
           fi
       - name: Download pytest coverage artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: backend-coverage
           path: backend
@@ -85,7 +85,7 @@ jobs:
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Validate Snyk token
         shell: bash
         env:
@@ -120,7 +120,7 @@ jobs:
       BACKEND_ENV_FILE: ${{ secrets.BACKEND_ENV_FILE }}
       LOCAL_IMAGE: backend-local:${{ github.sha }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Validate backend env file secret
         shell: bash
         run: |
@@ -143,7 +143,7 @@ jobs:
         shell: bash
         run: |
           docker save "$LOCAL_IMAGE" -o backend-image.tar
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: backend-image-tar
           path: backend-image.tar
@@ -155,7 +155,7 @@ jobs:
     env:
       LOCAL_IMAGE: backend-local:${{ github.sha }}
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         with:
           name: backend-image-tar
       - name: Load Docker image
@@ -170,7 +170,7 @@ jobs:
           output: trivy-report.txt
           exit-code: '0'
           ignore-unfixed: true
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         if: always()
         with:
           name: trivy-report
@@ -185,7 +185,7 @@ jobs:
       ECR_REPOSITORY: eyecanhelpbuddy/backend
       LOCAL_IMAGE: backend-local:${{ github.sha }}
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         with:
           name: backend-image-tar
       - name: Load Docker image
@@ -202,7 +202,7 @@ jobs:
             exit 1
           fi
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v5
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -227,10 +227,10 @@ jobs:
     needs: push-backend-image-to-ecr
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 24
       - name: Install frontend deps
         working-directory: frontend
         run: npm ci
@@ -242,44 +242,25 @@ jobs:
       - name: Run Playwright (starts Vite via webServer)
         working-directory: e2e
         run: npx playwright test
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         if: always()
         with:
           name: e2e-report
           path: reports/e2e
 
-  dast-zap:
-    name: DAST (OWASP ZAP baseline)
+
+  owasp-zap:
+    name: DAST (OWASP ZAP Scan)
     needs: push-backend-image-to-ecr
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: backend
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: ZAP Scan
+        uses: zaproxy/action-baseline@v0.14.0
         with:
-          python-version: "3.12"
-      - name: Install dependencies
-        run: pip install -r requirements.txt -r requirements-dev.txt
-      - name: Start backend
-        run: |
-          MONGO_URL="mongodb://localhost:27017/?serverSelectionTimeoutMS=500" \
-            python -m uvicorn main:app --host 127.0.0.1 --port 8000 &
-          for _ in $(seq 1 30); do curl -sf http://127.0.0.1:8000/ && break; sleep 1; done
-      - name: Run OWASP ZAP baseline scan (report-only)
-        run: |
-          mkdir -p ../reports/zap
-          docker run --rm --network host \
-            -v "${{ github.workspace }}/reports/zap:/zap/wrk" \
-            ghcr.io/zaproxy/zaproxy:stable \
-            zap-baseline.py -t http://127.0.0.1:8000 \
-            -r zap-report.html -J zap-report.json || true
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: zap-report
-          path: reports/zap
+          target: 'https://d3el92ejjxmmtz.cloudfront.net/'
+          allow_issue_writing: false
+        
 
   load-test:
     name: Stress / load (Locust)
@@ -289,8 +270,8 @@ jobs:
       run:
         working-directory: backend
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - name: Install dependencies
@@ -307,7 +288,7 @@ jobs:
             --host http://127.0.0.1:8000 \
             --headless -u 50 -r 10 -t 30s \
             --html ../reports/load/report.html
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         if: always()
         with:
           name: load-report
