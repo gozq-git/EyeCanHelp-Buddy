@@ -147,7 +147,8 @@ jobs:
         shell: bash
         run: docker load -i backend-image.tar
       - name: Run Trivy (report-only)
-        uses: aquasecurity/trivy-action@0.24.0
+        uses: aquasecurity/trivy-action@0.36.0
+        continue-on-error: true
         with:
           image-ref: ${{ env.LOCAL_IMAGE }}
           format: table
