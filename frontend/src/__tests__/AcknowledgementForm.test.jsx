@@ -26,8 +26,8 @@ describe('AcknowledgementForm', () => {
     await userEvent.type(screen.getByPlaceholderText('e.g. P001'), 'P001')
     await userEvent.type(screen.getAllByPlaceholderText('Full name')[0], 'Tan Ah Kow')
     await userEvent.type(screen.getAllByPlaceholderText('e.g. H35.31')[0], 'H35.31')
-    await userEvent.clear(screen.getByRole('spinbutton'))
-    await userEvent.type(screen.getByRole('spinbutton'), '3')
+    await userEvent.clear(screen.getAllByRole('spinbutton')[0])
+    await userEvent.type(screen.getAllByRole('spinbutton')[0], '3')
     await userEvent.click(screen.getByLabelText('Consent is valid'))
 
     await userEvent.type(screen.getByPlaceholderText('e.g. PAY001'), 'PAY001')
