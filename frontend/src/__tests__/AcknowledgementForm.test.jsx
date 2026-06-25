@@ -23,17 +23,18 @@ describe('AcknowledgementForm', () => {
 
     render(<AcknowledgementForm />)
 
-    await userEvent.type(screen.getByLabelText('Patient ID'), 'P001')
-    await userEvent.type(screen.getByLabelText('Patient Name'), 'Tan Ah Kow')
-    await userEvent.type(screen.getByLabelText('Diagnosis (ICD-10)'), 'H35.31')
-    await userEvent.type(screen.getByLabelText('Number of Injections'), '3')
+    await userEvent.type(screen.getByPlaceholderText('e.g. P001'), 'P001')
+    await userEvent.type(screen.getAllByPlaceholderText('Full name')[0], 'Tan Ah Kow')
+    await userEvent.type(screen.getAllByPlaceholderText('e.g. H35.31')[0], 'H35.31')
+    await userEvent.clear(screen.getByRole('spinbutton'))
+    await userEvent.type(screen.getByRole('spinbutton'), '3')
     await userEvent.click(screen.getByLabelText('Consent is valid'))
 
-    await userEvent.type(screen.getByLabelText('Payment ID'), 'PAY001')
-    await userEvent.type(screen.getAllByLabelText('Patient Name')[1], 'Tan Ah Kow')
-    await userEvent.type(screen.getAllByLabelText('Diagnosis (ICD-10)')[1], 'H35.31')
-    await userEvent.type(screen.getByLabelText('Max Medisave (SGD)'), '2150')
-    await userEvent.type(screen.getByLabelText('Est. Cost per Injection (SGD)'), '120.5')
+    await userEvent.type(screen.getByPlaceholderText('e.g. PAY001'), 'PAY001')
+    await userEvent.type(screen.getAllByPlaceholderText('Full name')[1], 'Tan Ah Kow')
+    await userEvent.type(screen.getAllByPlaceholderText('e.g. H35.31')[1], 'H35.31')
+    await userEvent.type(screen.getAllByPlaceholderText('0.00')[0], '2150')
+    await userEvent.type(screen.getAllByPlaceholderText('0.00')[1], '120.5')
 
     await userEvent.click(screen.getByRole('button', { name: 'Submit Acknowledgement' }))
 
@@ -53,7 +54,7 @@ describe('AcknowledgementForm', () => {
     mocks.submitAcknowledgement.mockRejectedValue(new Error('bad request'))
 
     render(<AcknowledgementForm />)
-    await userEvent.type(screen.getByLabelText('Patient ID'), 'P001')
+    await userEvent.type(screen.getByPlaceholderText('e.g. P001'), 'P001')
     await userEvent.click(screen.getByRole('button', { name: 'Submit Acknowledgement' }))
 
     await waitFor(() => {

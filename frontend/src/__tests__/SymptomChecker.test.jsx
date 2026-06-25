@@ -31,8 +31,8 @@ describe('SymptomChecker', () => {
 
     render(<SymptomChecker />)
 
-    await userEvent.type(screen.getByLabelText('Patient ID'), 'P001')
-    await userEvent.type(screen.getByLabelText('Describe your symptoms'), 'mild discomfort')
+    await userEvent.type(screen.getByPlaceholderText('e.g. P001'), 'P001')
+    await userEvent.type(screen.getByPlaceholderText('e.g. I have mild discomfort and tearing in my eye'), 'mild discomfort')
     await userEvent.click(screen.getByRole('button', { name: 'Check Symptoms' }))
 
     await waitFor(() => {
@@ -48,8 +48,8 @@ describe('SymptomChecker', () => {
 
     render(<SymptomChecker />)
 
-    await userEvent.type(screen.getByLabelText('Patient ID'), 'P001')
-    await userEvent.type(screen.getByLabelText('Describe your symptoms'), 'severe pain')
+    await userEvent.type(screen.getByPlaceholderText('e.g. P001'), 'P001')
+    await userEvent.type(screen.getByPlaceholderText('e.g. I have mild discomfort and tearing in my eye'), 'severe pain')
     await userEvent.click(screen.getByRole('button', { name: 'Check Symptoms' }))
 
     await waitFor(() => {
