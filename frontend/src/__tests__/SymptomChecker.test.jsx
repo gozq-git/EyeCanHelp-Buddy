@@ -3,15 +3,17 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import SymptomChecker from '../components/SymptomChecker'
 
-const assessSymptoms = vi.fn()
+const mocks = vi.hoisted(() => ({
+  assessSymptoms: vi.fn(),
+}))
 
 vi.mock('../api/client', () => ({
-  assessSymptoms,
+  assessSymptoms: mocks.assessSymptoms,
 }))
 
 describe('SymptomChecker', () => {
   beforeEach(() => {
-    assessSymptoms.mockReset()
+    mocks.assessSymptoms.mockReset()
   })
 
   it('does not call API when required fields are blank', async () => {
@@ -19,11 +21,11 @@ describe('SymptomChecker', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Check Symptoms' }))
 
-    expect(assessSymptoms).not.toHaveBeenCalled()
+    expect(mocks.assessSymptoms).not.toHaveBeenCalled()
   })
 
   it('submits symptoms and renders advice', async () => {
-    assessSymptoms.mockResolvedValue({
+    mocks.assessSymptoms.mockResolvedValue({
       data: { severity: 'mild', advice: 'Monitor symptoms and rest.' },
     })
 
@@ -34,7 +36,7 @@ describe('SymptomChecker', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Check Symptoms' }))
 
     await waitFor(() => {
-      expect(assessSymptoms).toHaveBeenCalledWith('P001', 'mild discomfort')
+      expect(mocks.assessSymptoms).toHaveBeenCalledWith('P001', 'mild discomfort')
     })
 
     expect(screen.getByText('mild symptoms')).toBeInTheDocument()
@@ -42,7 +44,7 @@ describe('SymptomChecker', () => {
   })
 
   it('shows an error when assessment fails', async () => {
-    assessSymptoms.mockRejectedValue(new Error('network'))
+    mocks.assessSymptoms.mockRejectedValue(new Error('network'))
 
     render(<SymptomChecker />)
 

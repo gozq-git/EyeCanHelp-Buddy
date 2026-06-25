@@ -3,22 +3,24 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import EpicLookup from '../components/EpicLookup'
 
-const getEpicPatient = vi.fn()
-const getEpicRecord = vi.fn()
+const mocks = vi.hoisted(() => ({
+  getEpicPatient: vi.fn(),
+  getEpicRecord: vi.fn(),
+}))
 
 vi.mock('../api/client', () => ({
-  getEpicPatient,
-  getEpicRecord,
+  getEpicPatient: mocks.getEpicPatient,
+  getEpicRecord: mocks.getEpicRecord,
 }))
 
 describe('EpicLookup', () => {
   beforeEach(() => {
-    getEpicPatient.mockReset()
-    getEpicRecord.mockReset()
+    mocks.getEpicPatient.mockReset()
+    mocks.getEpicRecord.mockReset()
   })
 
   it('fetches and renders patient and record details', async () => {
-    getEpicPatient.mockResolvedValue({
+    mocks.getEpicPatient.mockResolvedValue({
       data: {
         resourceType: 'Patient',
         patient_id: 'P001',
@@ -27,7 +29,7 @@ describe('EpicLookup', () => {
         phone_number: '+6591234567',
       },
     })
-    getEpicRecord.mockResolvedValue({
+    mocks.getEpicRecord.mockResolvedValue({
       data: {
         resourceType: 'DiagnosticReport',
         record_diagnosis: 'H35.31',
@@ -47,8 +49,8 @@ describe('EpicLookup', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Lookup' }))
 
     await waitFor(() => {
-      expect(getEpicPatient).toHaveBeenCalledWith('P001')
-      expect(getEpicRecord).toHaveBeenCalledWith('P001')
+      expect(mocks.getEpicPatient).toHaveBeenCalledWith('P001')
+      expect(mocks.getEpicRecord).toHaveBeenCalledWith('P001')
     })
 
     expect(screen.getByText(/FHIR Patient/)).toBeInTheDocument()
@@ -57,8 +59,8 @@ describe('EpicLookup', () => {
   })
 
   it('shows error message when lookup fails', async () => {
-    getEpicPatient.mockRejectedValue(new Error('not found'))
-    getEpicRecord.mockRejectedValue(new Error('not found'))
+    mocks.getEpicPatient.mockRejectedValue(new Error('not found'))
+    mocks.getEpicRecord.mockRejectedValue(new Error('not found'))
 
     render(<EpicLookup />)
 

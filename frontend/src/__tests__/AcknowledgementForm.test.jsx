@@ -3,19 +3,21 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import AcknowledgementForm from '../components/AcknowledgementForm'
 
-const submitAcknowledgement = vi.fn()
+const mocks = vi.hoisted(() => ({
+  submitAcknowledgement: vi.fn(),
+}))
 
 vi.mock('../api/client', () => ({
-  submitAcknowledgement,
+  submitAcknowledgement: mocks.submitAcknowledgement,
 }))
 
 describe('AcknowledgementForm', () => {
   beforeEach(() => {
-    submitAcknowledgement.mockReset()
+    mocks.submitAcknowledgement.mockReset()
   })
 
   it('submits transformed payload and shows confirmation', async () => {
-    submitAcknowledgement.mockResolvedValue({
+    mocks.submitAcknowledgement.mockResolvedValue({
       data: { record_id: 'REC-P001-010', issued: '2026-06-25T00:00:00Z' },
     })
 
@@ -36,8 +38,8 @@ describe('AcknowledgementForm', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Submit Acknowledgement' }))
 
     await waitFor(() => {
-      expect(submitAcknowledgement).toHaveBeenCalledOnce()
-      const payload = submitAcknowledgement.mock.calls[0][0]
+      expect(mocks.submitAcknowledgement).toHaveBeenCalledOnce()
+      const payload = mocks.submitAcknowledgement.mock.calls[0][0]
       expect(payload.patient_record.record_number_of_injections).toBe(3)
       expect(payload.payment.payment_maxMedisave).toBe(2150)
       expect(payload.payment.payment_estCostPerInjection).toBe(120.5)
@@ -48,7 +50,7 @@ describe('AcknowledgementForm', () => {
   })
 
   it('shows API failure message', async () => {
-    submitAcknowledgement.mockRejectedValue(new Error('bad request'))
+    mocks.submitAcknowledgement.mockRejectedValue(new Error('bad request'))
 
     render(<AcknowledgementForm />)
     await userEvent.type(screen.getByLabelText('Patient ID'), 'P001')
