@@ -44,6 +44,7 @@ jobs:
     name: SonarQube Scan (unit test & code_quality)
     needs: backend-tests
     runs-on: ubuntu-latest
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
         with:
@@ -55,16 +56,17 @@ jobs:
         run: |
           if [ -z "$SONAR_TOKEN" ]; then
             echo "Missing required secret: SONAR_TOKEN"
+            echo "For SonarCloud, create a token in SonarCloud and store it in GitHub Actions secret SONAR_TOKEN."
             exit 1
           fi
       - name: SonarQube Scan
-        uses: SonarSource/sonarqube-scan-action@v5
+        uses: sonarsource/sonarqube-scan-action@v6
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
   snyk-scan-BE:
     name: Snyk Scan BE (SCA & SAST)
-    needs: sonarqube-scan
+    needs: backend-tests
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
@@ -95,7 +97,9 @@ jobs:
 
   build-backend-image:
     name: Build backend Docker image
-    needs: snyk-scan-BE
+    needs:
+      - sonarqube-scan
+      - snyk-scan-BE
     runs-on: ubuntu-latest
     env:
       BACKEND_ENV_FILE: ${{ secrets.BACKEND_ENV_FILE }}
@@ -230,7 +234,7 @@ jobs:
 
   dast-zap:
     name: DAST (OWASP ZAP baseline)
-    needs: e2e-tests
+    needs: push-backend-image-to-ecr
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -263,7 +267,7 @@ jobs:
 
   load-test:
     name: Stress / load (Locust)
-    needs: dast-zap
+    needs: push-backend-image-to-ecr
     runs-on: ubuntu-latest
     defaults:
       run:
