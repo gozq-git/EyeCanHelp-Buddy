@@ -11,7 +11,7 @@ import boto3
 
 def invoke_model(system_prompt: str, user_prompt: str) -> str:
     """Single Bedrock ``converse`` call. Returns plain text (never raises)."""
-    model_name = os.getenv("BEDROCK_MODEL_ID", "global.anthropic.claude-sonnet-4-5-20250929-v1:0")
+    model_name = os.getenv("BEDROCK_MODEL_ID", "global.anthropic.claude-sonnet-4-6")
     region = os.getenv("AWS_REGION") or os.getenv("AWS_DEFAULT_REGION") or "us-east-1"
     temperature = float(os.getenv("BEDROCK_TEMPERATURE", "0.2"))
 
