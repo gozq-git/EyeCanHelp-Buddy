@@ -89,7 +89,11 @@ export default function ChatWindow({ onBack }) {
 
     if (label === 'General Enquiry') {
       setMode('general_enquiry')
-      addMsg({ role: 'bot', type: 'text', content: 'Sure, I can assist to answer general enquiries about the eye procedures or surgery.' })
+      addMsg({
+        role: 'bot',
+        type: 'text',
+        content: "Sure, I can help answer general enquiries about eye procedures or surgery.\n\nDisclaimer: this chatbot provides general information only and cannot replace your doctor's clinical advice, diagnosis, or treatment plan.\nIt is not intended to replace standard medical care.\nIf you have urgent or worsening symptoms, please seek immediate medical attention.",
+      })
     } else if (label === 'Fill up pre-procedure') {
       setMode('pre_procedure')
       setPreProcStep('login')
