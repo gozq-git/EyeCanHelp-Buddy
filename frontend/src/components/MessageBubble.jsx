@@ -1,4 +1,6 @@
 import React from 'react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import EyeLogoSVG from './EyeLogoSVG'
 import SingpassLoginButton from './SingpassLoginButton'
 import FinancialCounsellingDoc from './FinancialCounsellingDoc'
@@ -123,7 +125,39 @@ export default function MessageBubble({ role, type, content, formData, onQuickRe
         lineHeight: '1.5',
         whiteSpace: 'pre-wrap',
       }}>
-        {content}
+        <ReactMarkdown
+          remarkPlugins={[remarkGfm]}
+          components={{
+            p: ({ children }) => <p style={{ margin: '0 0 8px' }}>{children}</p>,
+            h2: ({ children }) => <h2 style={{ margin: '0 0 8px', fontSize: '18px' }}>{children}</h2>,
+            h3: ({ children }) => <h3 style={{ margin: '0 0 8px', fontSize: '16px' }}>{children}</h3>,
+            ul: ({ children }) => <ul style={{ margin: '0 0 8px', paddingLeft: '20px' }}>{children}</ul>,
+            li: ({ children }) => <li style={{ marginBottom: '4px' }}>{children}</li>,
+            blockquote: ({ children }) => (
+              <blockquote style={{ margin: '0', paddingLeft: '10px', borderLeft: '3px solid #D0D0D0' }}>
+                {children}
+              </blockquote>
+            ),
+            table: ({ children }) => (
+              <table style={{ width: '100%', borderCollapse: 'collapse', margin: '8px 0' }}>
+                {children}
+              </table>
+            ),
+            th: ({ children }) => (
+              <th style={{ border: '1px solid #D8D8D8', padding: '6px', textAlign: 'left', background: '#F8F8F8' }}>
+                {children}
+              </th>
+            ),
+            td: ({ children }) => (
+              <td style={{ border: '1px solid #D8D8D8', padding: '6px', verticalAlign: 'top' }}>
+                {children}
+              </td>
+            ),
+            hr: () => <hr style={{ border: 0, borderTop: '1px solid #D8D8D8', margin: '10px 0' }} />,
+          }}
+        >
+          {content || ''}
+        </ReactMarkdown>
       </div>
     </div>
   )

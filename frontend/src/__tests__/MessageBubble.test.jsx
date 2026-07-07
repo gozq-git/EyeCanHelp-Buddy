@@ -52,6 +52,17 @@ describe('MessageBubble — bot text', () => {
     expect(screen.getByText('I can help with eye queries.')).toBeInTheDocument()
   })
 
+  it('renders markdown bold text and tables for bot responses', () => {
+    const content = `## Amblyopia\n\n**Important**\n\n| Type | Description |\n|------|-------------|\n| A | B |`
+    render(<MessageBubble role="bot" type="text" content={content} />)
+
+    expect(screen.getByRole('heading', { level: 2, name: 'Amblyopia' })).toBeInTheDocument()
+    expect(screen.getByText('Important').tagName).toBe('STRONG')
+    expect(screen.getByRole('table')).toBeInTheDocument()
+    expect(screen.getByRole('columnheader', { name: 'Type' })).toBeInTheDocument()
+    expect(screen.getByRole('cell', { name: 'B' })).toBeInTheDocument()
+  })
+
   it('renders the EyeLogoSVG avatar', () => {
     const { container } = render(<MessageBubble role="bot" type="text" content="Hi" />)
     expect(container.querySelector('svg')).toBeInTheDocument()
