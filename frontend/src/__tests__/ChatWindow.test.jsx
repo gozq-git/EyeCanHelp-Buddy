@@ -110,7 +110,7 @@ describe('ChatWindow — General Enquiry flow', () => {
   it('clicking General Enquiry shows the bot confirmation message', async () => {
     render(<ChatWindow />)
     await userEvent.click(screen.getByRole('button', { name: 'General Enquiry' }))
-    expect(screen.getByText(/general enquiries about the eye/i)).toBeInTheDocument()
+    expect(screen.getByText(/general enquiries about eye/i)).toBeInTheDocument()
   })
 
   it('placeholder changes to "Write your message" in general enquiry mode', async () => {
