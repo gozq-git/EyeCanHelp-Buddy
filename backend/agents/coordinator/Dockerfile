@@ -12,4 +12,4 @@ COPY . .
 
 EXPOSE 8080
 
-CMD ["python", "agents/coordinator/main.py"]
+CMD ["opentelemetry-instrument", "python", "agents/coordinator/main.py"]
