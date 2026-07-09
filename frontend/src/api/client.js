@@ -20,6 +20,88 @@ export const assessSymptoms = (patientId, symptomDescription) =>
 export const sendChatMessage = (messages) =>
   api.post('/chat', { messages })
 
+const parseSseFrame = (frame) => {
+  const normalized = frame.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+  const lines = normalized.split('\n')
+  let event = 'message'
+  const data = []
+
+  for (const line of lines) {
+    if (line.startsWith('event:')) {
+      event = line.slice(6).trim() || 'message'
+    } else if (line.startsWith('data:')) {
+      data.push(line.slice(5).trimStart())
+    }
+  }
+
+  return { event, data: data.join('\n') }
+}
+
+export const sendChatMessageStream = async (messages, options = {}) => {
+  const { onChunk, signal } = options
+  const response = await fetch('/api/chat?stream=true', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'text/event-stream',
+    },
+    body: JSON.stringify({ messages }),
+    signal,
+  })
+
+  if (!response.ok) {
+    throw new Error(`Streaming request failed: ${response.status}`)
+  }
+
+  const contentType = response.headers.get('content-type') || ''
+  if (!contentType.includes('text/event-stream')) {
+    throw new Error(`Unexpected streaming content-type: ${contentType || 'unknown'}`)
+  }
+
+  if (!response.body) {
+    throw new Error('Streaming response body is unavailable')
+  }
+
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder('utf-8')
+  let buffer = ''
+  let fullText = ''
+
+  while (true) {
+    const { value, done } = await reader.read()
+    if (done) {
+      break
+    }
+
+    buffer += decoder.decode(value, { stream: true })
+    let boundary = buffer.indexOf('\n\n')
+    while (boundary !== -1) {
+      const frame = buffer.slice(0, boundary)
+      buffer = buffer.slice(boundary + 2)
+      const { event, data } = parseSseFrame(frame)
+
+      if (event === 'done' || data === '[DONE]') {
+        return fullText
+      }
+
+      if (event === 'error') {
+        throw new Error(data || 'Streaming request failed')
+      }
+
+      if (data) {
+        fullText += data
+        if (onChunk) {
+          onChunk(data)
+        }
+      }
+
+      boundary = buffer.indexOf('\n\n')
+    }
+  }
+
+  return fullText
+}
+
 export const simulateSingpassLogin = () =>
   Promise.resolve({ data: { patient_id: 'P001', patient_name: 'Test Patient' } })
 

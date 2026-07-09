@@ -107,3 +107,24 @@ async def test_invoke_with_http_endpoint_parses_json(monkeypatch):
     text = await llm_service._invoke_with_http_endpoint("test prompt")
 
     assert text == "hello from http"
+
+
+@pytest.mark.asyncio
+async def test_chat_stream_yields_runtime_chunks(monkeypatch):
+    class _StreamLines:
+        def iter_lines(self, chunk_size=10):
+            yield b"data: hello"
+            yield b"data: world"
+
+    async def _fake_runtime_response(prompt):
+        assert prompt == "USER: Hi"
+        return {
+            "contentType": "text/event-stream",
+            "response": _StreamLines(),
+        }
+
+    monkeypatch.setattr(llm_service, "_invoke_with_runtime_arn_response", _fake_runtime_response)
+
+    chunks = [chunk async for chunk in llm_service.chat_stream([{"role": "user", "content": "Hi"}])]
+
+    assert chunks == ["hello", "world"]

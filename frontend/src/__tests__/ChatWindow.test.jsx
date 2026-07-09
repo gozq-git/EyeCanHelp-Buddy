@@ -10,6 +10,7 @@ import ChatWindow from '../components/ChatWindow'
 // new-patient registration branch instead of the existing-patient ask_update branch.
 vi.mock('../api/client', () => ({
   sendChatMessage: vi.fn(),
+  sendChatMessageStream: vi.fn(),
   submitAcknowledgement: vi.fn(),
   getPatient: vi.fn(),
   getEpicRecord: vi.fn(),
@@ -28,6 +29,7 @@ vi.mock('../components/SingpassLoginButton', () => ({
 
 import {
   sendChatMessage,
+  sendChatMessageStream,
   submitAcknowledgement,
   getPatient,
   getEpicRecord,
@@ -104,6 +106,12 @@ describe('ChatWindow — welcome state', () => {
 describe('ChatWindow — General Enquiry flow', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    sendChatMessageStream.mockImplementation(async (_messages, { onChunk } = {}) => {
+      if (onChunk) {
+        onChunk('A cataract clouds the eye lens.')
+      }
+      return 'A cataract clouds the eye lens.'
+    })
     sendChatMessage.mockResolvedValue({ data: { reply: 'A cataract clouds the eye lens.' } })
   })
 
@@ -137,17 +145,18 @@ describe('ChatWindow — General Enquiry flow', () => {
     })
   })
 
-  it('sendChatMessage is called with a messages array containing the user message', async () => {
+  it('sendChatMessageStream is called with a messages array containing the user message', async () => {
     render(<ChatWindow />)
     await userEvent.click(screen.getByRole('button', { name: 'General Enquiry' }))
     await userEvent.type(screen.getByRole('textbox'), 'What is AMD?')
     await userEvent.keyboard('{Enter}')
-    await waitFor(() => expect(sendChatMessage).toHaveBeenCalled())
-    const [messages] = sendChatMessage.mock.calls[0]
+    await waitFor(() => expect(sendChatMessageStream).toHaveBeenCalled())
+    const [messages] = sendChatMessageStream.mock.calls[0]
     expect(messages.some(m => m.role === 'user' && m.content === 'What is AMD?')).toBe(true)
   })
 
   it('shows error message in chat when sendChatMessage rejects', async () => {
+    sendChatMessageStream.mockRejectedValueOnce(new Error('Stream failed'))
     sendChatMessage.mockRejectedValueOnce(new Error('Network error'))
     render(<ChatWindow />)
     await userEvent.click(screen.getByRole('button', { name: 'General Enquiry' }))

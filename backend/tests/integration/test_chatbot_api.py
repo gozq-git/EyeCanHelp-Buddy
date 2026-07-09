@@ -24,3 +24,27 @@ def test_chat_returns_mocked_reply(client, monkeypatch):
 def test_chat_rejects_malformed_body(client):
     resp = client.post("/api/chat", json={"messages": "not-a-list"})
     assert resp.status_code == 422
+
+
+def test_chat_stream_returns_sse_frames(client, monkeypatch):
+    async def fake_chat_stream(messages):
+        assert isinstance(messages, list)
+        assert messages[-1]["content"] == "What is a cataract?"
+        yield "A cataract"
+        yield " is a clouding"
+
+    monkeypatch.setattr("routers.chatbot.chat_stream", fake_chat_stream)
+
+    with client.stream(
+        "POST",
+        "/api/chat?stream=true",
+        json={"messages": [{"role": "user", "content": "What is a cataract?"}]},
+    ) as resp:
+        assert resp.status_code == 200
+        assert "text/event-stream" in resp.headers.get("content-type", "")
+        body = "".join(resp.iter_text())
+
+    assert "data: A cataract" in body
+    assert "data:  is a clouding" in body
+    assert "event: done" in body
+    assert "data: [DONE]" in body

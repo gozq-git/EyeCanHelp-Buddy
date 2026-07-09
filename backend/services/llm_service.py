@@ -2,6 +2,7 @@ import asyncio
 import json
 import os
 import uuid
+from collections.abc import AsyncIterator
 
 import boto3
 import httpx
@@ -77,10 +78,62 @@ def _extract_runtime_response(response: dict) -> str:
     return ""
 
 
-async def _invoke_with_runtime_arn(prompt: str) -> str:
+def _decode_chunk(chunk) -> str:
+    if isinstance(chunk, bytes):
+        return chunk.decode("utf-8")
+    return str(chunk)
+
+
+def _next_or_none(iterator):
+    try:
+        return next(iterator)
+    except StopIteration:
+        return None
+
+
+async def _stream_runtime_response(response: dict) -> AsyncIterator[str]:
+    content_type = str(response.get("contentType", ""))
+    stream = response.get("response")
+
+    if "text/event-stream" in content_type and stream is not None and hasattr(stream, "iter_lines"):
+        iterator = stream.iter_lines(chunk_size=10)
+        while True:
+            line = await asyncio.to_thread(_next_or_none, iterator)
+            if line is None:
+                break
+            text = _decode_chunk(line).strip()
+            if not text:
+                continue
+            if text.startswith("data: "):
+                text = text[6:]
+            if text:
+                yield text
+        return
+
+    if "application/json" in content_type and stream is not None and hasattr(stream, "__iter__"):
+        iterator = iter(stream)
+        pieces: list[str] = []
+        while True:
+            chunk = await asyncio.to_thread(_next_or_none, iterator)
+            if chunk is None:
+                break
+            pieces.append(_decode_chunk(chunk))
+        text = _extract_text("application/json", "".join(pieces)).strip()
+        if text:
+            yield text
+        return
+
+    if stream is not None and hasattr(stream, "read"):
+        raw = await asyncio.to_thread(stream.read)
+        text = _decode_chunk(raw).strip() if raw else ""
+        if text:
+            yield text
+
+
+async def _invoke_with_runtime_arn_response(prompt: str) -> dict | None:
     runtime_arn = os.getenv("AGENTCORE_COORDINATOR_RUNTIME_ARN", "").strip()
     if not runtime_arn:
-        return ""
+        return None
 
     region = os.getenv("AWS_REGION", "").strip() or _extract_region_from_arn(runtime_arn)
     session_id = os.getenv("AGENTCORE_RUNTIME_SESSION_ID", "").strip() or str(uuid.uuid4())
@@ -93,6 +146,13 @@ async def _invoke_with_runtime_arn(prompt: str) -> str:
         runtimeSessionId=session_id,
         payload=payload,
     )
+    return response
+
+
+async def _invoke_with_runtime_arn(prompt: str) -> str:
+    response = await _invoke_with_runtime_arn_response(prompt)
+    if not response:
+        return ""
     return _extract_runtime_response(response)
 
 
@@ -117,3 +177,15 @@ async def chat(messages: list[dict]) -> str:
     # if not text:
     #     return "No response returned from coordinator runtime."
     return text
+
+
+async def chat_stream(messages: list[dict]) -> AsyncIterator[str]:
+    prompt = _build_prompt(messages)
+
+    response = await _invoke_with_runtime_arn_response(prompt)
+    if not response:
+        return
+
+    async for chunk in _stream_runtime_response(response):
+        if chunk:
+            yield chunk

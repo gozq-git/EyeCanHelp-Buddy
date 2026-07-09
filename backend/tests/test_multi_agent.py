@@ -7,10 +7,18 @@ Usage:
 """
 
 import json
+import os
 import sys
 from typing import Optional
 
 import boto3
+import pytest
+
+
+pytestmark = pytest.mark.skipif(
+    not os.getenv("RUN_MULTI_AGENT_TESTS") or not os.getenv("AGENTCORE_COORDINATOR_RUNTIME_ARN"),
+    reason="Optional integration test. Set RUN_MULTI_AGENT_TESTS=1 and AGENTCORE_COORDINATOR_RUNTIME_ARN to run.",
+)
 
 
 def extract_region_from_arn(arn: str) -> str:

@@ -22,6 +22,7 @@ import {
   getLatestAcknowledgement,
   getPatient,
   sendChatMessage,
+  sendChatMessageStream,
   simulateSingpassLogin,
   submitAcknowledgement,
 } from '../api/client'
@@ -65,5 +66,42 @@ describe('api client', () => {
     await expect(simulateSingpassLogin()).resolves.toEqual({
       data: { patient_id: 'P001', patient_name: 'Test Patient' },
     })
+  })
+
+  it('streams SSE chat chunks and returns the accumulated text', async () => {
+    const encoder = new TextEncoder()
+    const chunks = [
+      'data: hello\n\n',
+      'data: world\n\n',
+      'event: done\ndata: [DONE]\n\n',
+    ]
+    const mockRead = vi.fn()
+      .mockResolvedValueOnce({ done: false, value: encoder.encode(chunks[0]) })
+      .mockResolvedValueOnce({ done: false, value: encoder.encode(chunks[1]) })
+      .mockResolvedValueOnce({ done: false, value: encoder.encode(chunks[2]) })
+      .mockResolvedValueOnce({ done: true, value: undefined })
+
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: { get: () => 'text/event-stream' },
+      body: { getReader: () => ({ read: mockRead }) },
+    })
+
+    const originalFetch = global.fetch
+    global.fetch = fetchMock
+    const seen = []
+
+    try {
+      const result = await sendChatMessageStream([{ role: 'user', content: 'hi' }], {
+        onChunk: (chunk) => seen.push(chunk),
+      })
+
+      expect(fetchMock).toHaveBeenCalled()
+      expect(seen).toEqual(['hello', 'world'])
+      expect(result).toBe('helloworld')
+    } finally {
+      global.fetch = originalFetch
+    }
   })
 })

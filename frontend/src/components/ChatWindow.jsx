@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react'
 import MessageBubble from './MessageBubble'
 import EyeLogoSVG from './EyeLogoSVG'
-import { sendChatMessage, submitAcknowledgement, getEpicRecord, getPatient, createPatient, getLatestAcknowledgement } from '../api/client'
+import { sendChatMessage, sendChatMessageStream, submitAcknowledgement, getEpicRecord, getPatient, createPatient, getLatestAcknowledgement } from '../api/client'
 
 let _msgId = 1
 const nextId = () => ++_msgId
@@ -74,6 +74,7 @@ export default function ChatWindow({ onBack }) {
   const [loading, setLoading] = useState(false)
   const bottomRef = useRef(null)
   const topRef = useRef(null)
+  const streamAbortRef = useRef(null)
 
   const scrollToTop = () => topRef.current?.scrollIntoView({ behavior: 'smooth' })
 
@@ -82,7 +83,23 @@ export default function ChatWindow({ onBack }) {
     return () => clearTimeout(t)
   }, [messages])
 
-  const addMsg = (msg) => setMessages(prev => [...prev, { id: nextId(), ...msg }])
+  useEffect(() => () => {
+    streamAbortRef.current?.abort()
+  }, [])
+
+  const addMsg = (msg) => {
+    const id = nextId()
+    setMessages(prev => [...prev, { id, ...msg }])
+    return id
+  }
+  const updateMsg = (id, patch) => {
+    setMessages(prev => prev.map(msg => {
+      if (msg.id !== id) return msg
+      const nextPatch = typeof patch === 'function' ? patch(msg) : patch
+      return { ...msg, ...nextPatch }
+    }))
+  }
+  const removeMsg = (id) => setMessages(prev => prev.filter(msg => msg.id !== id))
 
   const handleQuickReply = (label) => {
     addMsg({ role: 'user', type: 'text', content: label })
@@ -429,12 +446,40 @@ export default function ChatWindow({ onBack }) {
       .filter(m => m.type === 'text')
       .map(m => ({ role: m.role === 'bot' ? 'assistant' : 'user', content: m.content }))
 
+    const placeholderId = addMsg({ role: 'bot', type: 'text', content: '' })
+    const controller = new AbortController()
+    streamAbortRef.current = controller
+
     try {
-      const res = await sendChatMessage(history)
-      addMsg({ role: 'bot', type: 'text', content: res.data.reply })
-    } catch {
-      addMsg({ role: 'bot', type: 'text', content: 'Sorry, I encountered an error. Please try again.' })
+      let receivedStreamChunk = false
+      const streamedText = await sendChatMessageStream(history, {
+        signal: controller.signal,
+        onChunk: (chunk) => {
+          receivedStreamChunk = true
+          updateMsg(placeholderId, prev => ({ content: `${prev.content}${chunk}` }))
+        },
+      })
+
+      if (!receivedStreamChunk) {
+        updateMsg(placeholderId, { content: streamedText || 'No response returned from coordinator runtime.' })
+      }
+    } catch (streamError) {
+      if (streamError?.name === 'AbortError') {
+        removeMsg(placeholderId)
+        return
+      }
+
+      try {
+        const res = await sendChatMessage(history)
+        updateMsg(placeholderId, { content: res.data.reply })
+      } catch {
+        removeMsg(placeholderId)
+        addMsg({ role: 'bot', type: 'text', content: 'Sorry, I encountered an error. Please try again.' })
+      }
     } finally {
+      if (streamAbortRef.current === controller) {
+        streamAbortRef.current = null
+      }
       setLoading(false)
     }
   }

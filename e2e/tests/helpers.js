@@ -38,7 +38,11 @@ const json = (body, status = 200) => ({
  */
 export async function mockBackend(page, overrides = {}) {
   const handlers = {
-    chat: (route) => route.fulfill(json({ reply: 'A cataract is a clouding of the eye lens.' })),
+    chat: (route) => route.fulfill({
+      status: 200,
+      contentType: 'text/event-stream',
+      body: 'data: A cataract is a clouding of the eye lens.\n\nevent: done\ndata: [DONE]\n\n',
+    }),
     patient: (route) => route.fulfill(json(PATIENT_P001)),
     epicRecord: (route) => route.fulfill(json(EPIC_RECORD_P001)),
     // No prior acknowledgement by default → 404 so the post-op merge is skipped.
@@ -51,7 +55,7 @@ export async function mockBackend(page, overrides = {}) {
     ...overrides,
   }
 
-  await page.route('**/api/chat', handlers.chat)
+  await page.route('**/api/chat*', handlers.chat)
   await page.route('**/api/acknowledgement/latest/**', handlers.latestAck)
   await page.route('**/api/acknowledgement', handlers.submitAck)
   await page.route('**/api/epic/patient/*/record', handlers.epicRecord)
