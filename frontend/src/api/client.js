@@ -30,12 +30,25 @@ const parseSseFrame = (frame) => {
     if (line.startsWith('event:')) {
       event = line.slice(6).trim() || 'message'
     } else if (line.startsWith('data:')) {
-      data.push(line.slice(5).trimStart())
+      const value = line[5] === ' ' ? line.slice(6) : line.slice(5)
+      data.push(value)
     }
   }
 
   return { event, data: data.join('\n') }
 }
+
+const findFrameBoundary = (buffer) => {
+  const lfBoundary = buffer.indexOf('\n\n')
+  const crlfBoundary = buffer.indexOf('\r\n\r\n')
+
+  if (lfBoundary === -1) return crlfBoundary
+  if (crlfBoundary === -1) return lfBoundary
+  return Math.min(lfBoundary, crlfBoundary)
+}
+
+const frameSeparatorLength = (buffer, boundary) =>
+  buffer.startsWith('\r\n\r\n', boundary) ? 4 : 2
 
 export const sendChatMessageStream = async (messages, options = {}) => {
   const { onChunk, signal } = options
@@ -74,10 +87,10 @@ export const sendChatMessageStream = async (messages, options = {}) => {
     }
 
     buffer += decoder.decode(value, { stream: true })
-    let boundary = buffer.indexOf('\n\n')
+    let boundary = findFrameBoundary(buffer)
     while (boundary !== -1) {
       const frame = buffer.slice(0, boundary)
-      buffer = buffer.slice(boundary + 2)
+      buffer = buffer.slice(boundary + frameSeparatorLength(buffer, boundary))
       const { event, data } = parseSseFrame(frame)
 
       if (event === 'done' || data === '[DONE]') {
@@ -95,7 +108,7 @@ export const sendChatMessageStream = async (messages, options = {}) => {
         }
       }
 
-      boundary = buffer.indexOf('\n\n')
+      boundary = findFrameBoundary(buffer)
     }
   }
 

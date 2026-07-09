@@ -91,6 +91,12 @@ def _next_or_none(iterator):
         return None
 
 
+def _chunk_text(text: str, chunk_size: int = 24) -> list[str]:
+    if not text:
+        return []
+    return [text[i:i + chunk_size] for i in range(0, len(text), chunk_size)]
+
+
 async def _stream_runtime_response(response: dict) -> AsyncIterator[str]:
     content_type = str(response.get("contentType", ""))
     stream = response.get("response")
@@ -119,15 +125,15 @@ async def _stream_runtime_response(response: dict) -> AsyncIterator[str]:
                 break
             pieces.append(_decode_chunk(chunk))
         text = _extract_text("application/json", "".join(pieces)).strip()
-        if text:
-            yield text
+        for piece in _chunk_text(text):
+            yield piece
         return
 
     if stream is not None and hasattr(stream, "read"):
         raw = await asyncio.to_thread(stream.read)
         text = _decode_chunk(raw).strip() if raw else ""
-        if text:
-            yield text
+        for piece in _chunk_text(text):
+            yield piece
 
 
 async def _invoke_with_runtime_arn_response(prompt: str) -> dict | None:

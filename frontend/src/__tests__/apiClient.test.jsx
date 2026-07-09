@@ -104,4 +104,40 @@ describe('api client', () => {
       global.fetch = originalFetch
     }
   })
+
+  it('parses CRLF-delimited SSE frames', async () => {
+    const encoder = new TextEncoder()
+    const chunks = [
+      'data: hello\r\n\r\n',
+      'data: world\r\n\r\n',
+      'event: done\r\ndata: [DONE]\r\n\r\n',
+    ]
+    const mockRead = vi.fn()
+      .mockResolvedValueOnce({ done: false, value: encoder.encode(chunks[0]) })
+      .mockResolvedValueOnce({ done: false, value: encoder.encode(chunks[1]) })
+      .mockResolvedValueOnce({ done: false, value: encoder.encode(chunks[2]) })
+      .mockResolvedValueOnce({ done: true, value: undefined })
+
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: { get: () => 'text/event-stream' },
+      body: { getReader: () => ({ read: mockRead }) },
+    })
+
+    const originalFetch = global.fetch
+    global.fetch = fetchMock
+    const seen = []
+
+    try {
+      const result = await sendChatMessageStream([{ role: 'user', content: 'hi' }], {
+        onChunk: (chunk) => seen.push(chunk),
+      })
+
+      expect(seen).toEqual(['hello', 'world'])
+      expect(result).toBe('helloworld')
+    } finally {
+      global.fetch = originalFetch
+    }
+  })
 })
