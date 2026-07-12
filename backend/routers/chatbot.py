@@ -23,7 +23,7 @@ class ChatResponse(BaseModel):
     reply: str
 
 
-HEARTBEAT_INTERVAL_SECONDS = float(os.getenv("CHAT_STREAM_HEARTBEAT_SECONDS", "10"))
+HEARTBEAT_INTERVAL_SECONDS = float(os.getenv("CHAT_STREAM_HEARTBEAT_SECONDS", "1"))
 
 
 def _to_sse_frame(chunk: str) -> str:
