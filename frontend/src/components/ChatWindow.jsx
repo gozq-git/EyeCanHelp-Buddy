@@ -72,6 +72,7 @@ export default function ChatWindow({ onBack }) {
   const [messages, setMessages] = useState(INIT_MESSAGES)
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
+  const [streamHeartbeatCount, setStreamHeartbeatCount] = useState(0)
   const bottomRef = useRef(null)
   const topRef = useRef(null)
   const streamAbortRef = useRef(null)
@@ -441,6 +442,7 @@ export default function ChatWindow({ onBack }) {
 
     addMsg({ role: 'user', type: 'text', content: text })
     setLoading(true)
+    setStreamHeartbeatCount(0)
 
     const history = [...messages, { role: 'user', type: 'text', content: text }]
       .filter(m => m.type === 'text')
@@ -457,6 +459,9 @@ export default function ChatWindow({ onBack }) {
         onChunk: (chunk) => {
           receivedStreamChunk = true
           updateMsg(placeholderId, prev => ({ content: `${prev.content}${chunk}` }))
+        },
+        onHeartbeat: () => {
+          setStreamHeartbeatCount(prev => prev + 1)
         },
       })
 
@@ -481,6 +486,7 @@ export default function ChatWindow({ onBack }) {
         streamAbortRef.current = null
       }
       setLoading(false)
+      setStreamHeartbeatCount(0)
     }
   }
 
@@ -538,7 +544,7 @@ export default function ChatWindow({ onBack }) {
             <div style={{ display: 'flex', alignItems: 'flex-end', gap: '8px', marginBottom: '8px' }}>
               <EyeLogoSVG size={26} />
               <div style={{ background: '#fff', borderRadius: '4px 20px 20px 20px', padding: '10px 16px', fontSize: '14px', color: '#777', boxShadow: '0 1px 4px rgba(0,0,0,0.08)' }}>
-                Thinking…
+                {streamHeartbeatCount > 0 ? `Thinking… (heartbeat x${streamHeartbeatCount})` : 'Thinking…'}
               </div>
             </div>
           )}

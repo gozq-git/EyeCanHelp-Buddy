@@ -1,4 +1,6 @@
 """Integration tests for the chatbot endpoint with the LLM/AgentCore call mocked."""
+import asyncio
+
 import pytest
 
 pytestmark = pytest.mark.integration
@@ -48,3 +50,25 @@ def test_chat_stream_returns_sse_frames(client, monkeypatch):
     assert "data:  is a clouding" in body
     assert "event: done" in body
     assert "data: [DONE]" in body
+
+
+def test_chat_stream_emits_heartbeat_events(client, monkeypatch):
+    async def fake_chat_stream(messages):
+        assert isinstance(messages, list)
+        await asyncio.sleep(0.03)
+        yield "token"
+
+    monkeypatch.setattr("routers.chatbot.chat_stream", fake_chat_stream)
+    monkeypatch.setattr("routers.chatbot.HEARTBEAT_INTERVAL_SECONDS", 0.01)
+
+    with client.stream(
+        "POST",
+        "/api/chat?stream=true",
+        json={"messages": [{"role": "user", "content": "What is a cataract?"}]},
+    ) as resp:
+        assert resp.status_code == 200
+        body = "".join(resp.iter_text())
+
+    assert "event: heartbeat" in body
+    assert "data: ping" in body
+    assert "data: token" in body

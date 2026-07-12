@@ -140,4 +140,47 @@ describe('api client', () => {
       global.fetch = originalFetch
     }
   })
+
+  it('surfaces heartbeat events without appending heartbeat payload to chat text', async () => {
+    const encoder = new TextEncoder()
+    const chunks = [
+      'event: heartbeat\ndata: ping\n\n',
+      'data: hello\n\n',
+      'event: heartbeat\ndata: ping\n\n',
+      'data: world\n\n',
+      'event: done\ndata: [DONE]\n\n',
+    ]
+    const mockRead = vi.fn()
+      .mockResolvedValueOnce({ done: false, value: encoder.encode(chunks[0]) })
+      .mockResolvedValueOnce({ done: false, value: encoder.encode(chunks[1]) })
+      .mockResolvedValueOnce({ done: false, value: encoder.encode(chunks[2]) })
+      .mockResolvedValueOnce({ done: false, value: encoder.encode(chunks[3]) })
+      .mockResolvedValueOnce({ done: false, value: encoder.encode(chunks[4]) })
+      .mockResolvedValueOnce({ done: true, value: undefined })
+
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: { get: () => 'text/event-stream' },
+      body: { getReader: () => ({ read: mockRead }) },
+    })
+
+    const originalFetch = global.fetch
+    global.fetch = fetchMock
+    const seenChunks = []
+    const seenHeartbeat = []
+
+    try {
+      const result = await sendChatMessageStream([{ role: 'user', content: 'hi' }], {
+        onChunk: (chunk) => seenChunks.push(chunk),
+        onHeartbeat: (heartbeat) => seenHeartbeat.push(heartbeat),
+      })
+
+      expect(seenHeartbeat).toEqual(['ping', 'ping'])
+      expect(seenChunks).toEqual(['hello', 'world'])
+      expect(result).toBe('helloworld')
+    } finally {
+      global.fetch = originalFetch
+    }
+  })
 })

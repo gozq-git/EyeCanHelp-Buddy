@@ -51,7 +51,7 @@ const frameSeparatorLength = (buffer, boundary) =>
   buffer.startsWith('\r\n\r\n', boundary) ? 4 : 2
 
 export const sendChatMessageStream = async (messages, options = {}) => {
-  const { onChunk, signal } = options
+  const { onChunk, onHeartbeat, signal } = options
   const response = await fetch('/api/chat?stream=true', {
     method: 'POST',
     headers: {
@@ -99,6 +99,14 @@ export const sendChatMessageStream = async (messages, options = {}) => {
 
       if (event === 'error') {
         throw new Error(data || 'Streaming request failed')
+      }
+
+      if (event === 'heartbeat') {
+        if (onHeartbeat) {
+          onHeartbeat(data || 'ping')
+        }
+        boundary = findFrameBoundary(buffer)
+        continue
       }
 
       if (data) {
