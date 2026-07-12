@@ -39,7 +39,7 @@ def _extract_text(content_type: str, raw_text: str) -> str:
         chunks: list[str] = []
         for line in raw_text.splitlines():
             if line.startswith("data: "):
-                chunks.append(line[6:])
+                chunks.append(_decode_sse_payload(line[6:]))
         return "\n".join(chunks).strip() or raw_text
 
     return raw_text
@@ -63,7 +63,7 @@ def _extract_runtime_response(response: dict) -> str:
                 continue
             text = line.decode("utf-8")
             if text.startswith("data: "):
-                text = text[6:]
+                text = _decode_sse_payload(text[6:])
             chunks.append(text)
         return "\n".join(chunks).strip()
 
@@ -82,6 +82,30 @@ def _decode_chunk(chunk) -> str:
     if isinstance(chunk, bytes):
         return chunk.decode("utf-8")
     return str(chunk)
+
+
+def _decode_sse_payload(payload: str) -> str:
+    """Decode SSE data field value, including JSON-encoded strings from AgentCore."""
+    text = (payload or "").strip()
+    if not text:
+        return ""
+
+    try:
+        parsed = json.loads(text)
+    except json.JSONDecodeError:
+        return text
+
+    if isinstance(parsed, str):
+        return parsed
+
+    if isinstance(parsed, dict):
+        for key in ("response", "text", "message", "error"):
+            value = parsed.get(key)
+            if value is not None:
+                return str(value)
+        return json.dumps(parsed, ensure_ascii=False)
+
+    return str(parsed)
 
 
 def _next_or_none(iterator):
@@ -111,7 +135,7 @@ async def _stream_runtime_response(response: dict) -> AsyncIterator[str]:
             if not text:
                 continue
             if text.startswith("data: "):
-                text = text[6:]
+                text = _decode_sse_payload(text[6:])
             if text:
                 yield text
         return

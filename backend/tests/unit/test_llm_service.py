@@ -57,6 +57,11 @@ def test_extract_text_event_stream():
     assert _extract_text("text/event-stream", raw) == "line one\nline two"
 
 
+def test_extract_text_event_stream_json_encoded():
+    raw = "data: \"line one\\n\"\n" "data: \"line two \\u26a0\""
+    assert _extract_text("text/event-stream", raw) == "line one\n\nline two ⚠"
+
+
 def test_extract_text_plain_passthrough():
     assert _extract_text("text/plain", "just text") == "just text"
 

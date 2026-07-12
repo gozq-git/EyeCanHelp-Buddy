@@ -30,6 +30,17 @@ def test_extract_runtime_response_event_stream():
     assert llm_service._extract_runtime_response(response) == "hello\nworld"
 
 
+def test_extract_runtime_response_event_stream_json_encoded_chunks():
+    response = {
+        "contentType": "text/event-stream",
+        "response": _StreamLines([
+            b'data: "Hello\\n"',
+            b'data: "World \\u26a0"',
+        ]),
+    }
+    assert llm_service._extract_runtime_response(response) == "Hello\n\nWorld ⚠"
+
+
 def test_extract_runtime_response_json_stream():
     response = {
         "contentType": "application/json",
