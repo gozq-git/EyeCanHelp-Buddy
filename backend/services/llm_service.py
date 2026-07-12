@@ -144,6 +144,8 @@ async def _invoke_with_runtime_arn_response(prompt: str) -> dict | None:
     region = os.getenv("AWS_REGION", "").strip() or _extract_region_from_arn(runtime_arn)
     session_id = os.getenv("AGENTCORE_RUNTIME_SESSION_ID", "").strip() or str(uuid.uuid4())
     payload = json.dumps({"prompt": prompt}).encode("utf-8")
+    request_content_type = os.getenv("AGENTCORE_REQUEST_CONTENT_TYPE", "application/json")
+    response_accept = os.getenv("AGENTCORE_RESPONSE_ACCEPT", "text/event-stream")
 
     client = boto3.client("bedrock-agentcore", region_name=region)
     response = await asyncio.to_thread(
@@ -151,6 +153,8 @@ async def _invoke_with_runtime_arn_response(prompt: str) -> dict | None:
         agentRuntimeArn=runtime_arn,
         runtimeSessionId=session_id,
         payload=payload,
+        contentType=request_content_type,
+        accept=response_accept,
     )
     return response
 
