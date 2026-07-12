@@ -73,6 +73,7 @@ export default function ChatWindow({ onBack }) {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [streamHeartbeatCount, setStreamHeartbeatCount] = useState(0)
+  const [showThinkingBubble, setShowThinkingBubble] = useState(false)
   const bottomRef = useRef(null)
   const topRef = useRef(null)
   const streamAbortRef = useRef(null)
@@ -443,12 +444,13 @@ export default function ChatWindow({ onBack }) {
     addMsg({ role: 'user', type: 'text', content: text })
     setLoading(true)
     setStreamHeartbeatCount(0)
+    setShowThinkingBubble(true)
 
     const history = [...messages, { role: 'user', type: 'text', content: text }]
       .filter(m => m.type === 'text')
       .map(m => ({ role: m.role === 'bot' ? 'assistant' : 'user', content: m.content }))
 
-    const placeholderId = addMsg({ role: 'bot', type: 'text', content: '' })
+    let placeholderId = null
     const controller = new AbortController()
     streamAbortRef.current = controller
 
@@ -457,7 +459,13 @@ export default function ChatWindow({ onBack }) {
       const streamedText = await sendChatMessageStream(history, {
         signal: controller.signal,
         onChunk: (chunk) => {
-          receivedStreamChunk = true
+          if (!receivedStreamChunk) {
+            receivedStreamChunk = true
+            setShowThinkingBubble(false)
+            placeholderId = addMsg({ role: 'bot', type: 'text', content: chunk })
+            return
+          }
+
           updateMsg(placeholderId, prev => ({ content: `${prev.content}${chunk}` }))
         },
         onHeartbeat: () => {
@@ -466,19 +474,30 @@ export default function ChatWindow({ onBack }) {
       })
 
       if (!receivedStreamChunk) {
-        updateMsg(placeholderId, { content: streamedText || 'No response returned from coordinator runtime.' })
+        setShowThinkingBubble(false)
+        addMsg({ role: 'bot', type: 'text', content: streamedText || 'No response returned from coordinator runtime.' })
       }
     } catch (streamError) {
       if (streamError?.name === 'AbortError') {
-        removeMsg(placeholderId)
+        if (placeholderId !== null) {
+          removeMsg(placeholderId)
+        }
         return
       }
 
+      setShowThinkingBubble(false)
+
       try {
         const res = await sendChatMessage(history)
-        updateMsg(placeholderId, { content: res.data.reply })
+        if (placeholderId !== null) {
+          updateMsg(placeholderId, { content: res.data.reply })
+        } else {
+          addMsg({ role: 'bot', type: 'text', content: res.data.reply })
+        }
       } catch {
-        removeMsg(placeholderId)
+        if (placeholderId !== null) {
+          removeMsg(placeholderId)
+        }
         addMsg({ role: 'bot', type: 'text', content: 'Sorry, I encountered an error. Please try again.' })
       }
     } finally {
@@ -487,6 +506,7 @@ export default function ChatWindow({ onBack }) {
       }
       setLoading(false)
       setStreamHeartbeatCount(0)
+      setShowThinkingBubble(false)
     }
   }
 
@@ -541,7 +561,7 @@ export default function ChatWindow({ onBack }) {
               onSingpassLogin={handleSingpassLogin}
             />
           ))}
-          {loading && (
+          {loading && showThinkingBubble && (
             <div style={{ display: 'flex', alignItems: 'flex-end', gap: '8px', marginBottom: '8px' }}>
               <EyeLogoSVG size={26} />
               <div style={{ background: '#fff', borderRadius: '4px 20px 20px 20px', padding: '10px 16px', fontSize: '14px', color: '#777', boxShadow: '0 1px 4px rgba(0,0,0,0.08)' }}>
