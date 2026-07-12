@@ -505,7 +505,7 @@ export default function ChatWindow({ onBack }) {
     : 'General Enquiry'
 
   const centered = { maxWidth: '900px', margin: '0 auto', width: '100%' }
-  const thinkingDots = '.'.repeat(Math.max(1, streamHeartbeatCount))
+  const thinkingDots = '.'.repeat(streamHeartbeatCount)
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: '#f7f8fc' }}>
