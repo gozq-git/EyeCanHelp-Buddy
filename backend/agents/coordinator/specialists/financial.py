@@ -1,5 +1,5 @@
 """Financial specialist plug-in — Bedrock-only financial guidance."""
-from llm import invoke_model
+from llm import invoke_model, invoke_model_stream
 from specialists.base import CoordinatorState, Specialist
 from specialists.registry import register
 
@@ -29,3 +29,7 @@ class FinancialSpecialist(Specialist):
     def handle(self, state: CoordinatorState) -> CoordinatorState:
         query = state.get("kb_query", state.get("prompt", ""))
         return {"response": invoke_model(FINANCIAL_SYSTEM_PROMPT, query)}
+
+    def handle_stream(self, state: CoordinatorState):
+        query = state.get("kb_query", state.get("prompt", ""))
+        yield from invoke_model_stream(FINANCIAL_SYSTEM_PROMPT, query)

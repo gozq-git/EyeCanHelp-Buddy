@@ -136,14 +136,14 @@ async def _stream_runtime_response(response: dict) -> AsyncIterator[str]:
             yield piece
 
 
-async def _invoke_with_runtime_arn_response(prompt: str) -> dict | None:
+async def _invoke_with_runtime_arn_response(prompt: str, stream: bool = False) -> dict | None:
     runtime_arn = os.getenv("AGENTCORE_COORDINATOR_RUNTIME_ARN", "").strip()
     if not runtime_arn:
         return None
 
     region = os.getenv("AWS_REGION", "").strip() or _extract_region_from_arn(runtime_arn)
     session_id = os.getenv("AGENTCORE_RUNTIME_SESSION_ID", "").strip() or str(uuid.uuid4())
-    payload = json.dumps({"prompt": prompt}).encode("utf-8")
+    payload = json.dumps({"prompt": prompt, "stream": stream}).encode("utf-8")
     request_content_type = os.getenv("AGENTCORE_REQUEST_CONTENT_TYPE", "application/json")
     response_accept = os.getenv("AGENTCORE_RESPONSE_ACCEPT", "text/event-stream")
 
@@ -160,7 +160,7 @@ async def _invoke_with_runtime_arn_response(prompt: str) -> dict | None:
 
 
 async def _invoke_with_runtime_arn(prompt: str) -> str:
-    response = await _invoke_with_runtime_arn_response(prompt)
+    response = await _invoke_with_runtime_arn_response(prompt, stream=False)
     if not response:
         return ""
     return _extract_runtime_response(response)
@@ -192,7 +192,7 @@ async def chat(messages: list[dict]) -> str:
 async def chat_stream(messages: list[dict]) -> AsyncIterator[str]:
     prompt = _build_prompt(messages)
 
-    response = await _invoke_with_runtime_arn_response(prompt)
+    response = await _invoke_with_runtime_arn_response(prompt, stream=True)
     if not response:
         return
 

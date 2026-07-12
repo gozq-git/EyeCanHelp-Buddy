@@ -6,6 +6,7 @@ specialist is a *plug-in* that conforms to the :class:`Specialist` contract
 below and registers itself with the registry. New specialists are added by
 dropping a module into this package — the core never changes.
 """
+from collections.abc import Iterator
 from typing import Any, Dict, List, TypedDict
 
 
@@ -37,3 +38,13 @@ class Specialist:
     def handle(self, state: CoordinatorState) -> CoordinatorState:
         """Produce a partial state update (must set ``response``)."""
         raise NotImplementedError
+
+    def handle_stream(self, state: CoordinatorState) -> Iterator[str]:
+        """Yield response tokens/chunks for caller-visible streaming.
+
+        Default behavior falls back to the non-streaming ``handle`` contract.
+        """
+        result = self.handle(state)
+        text = str(result.get("response", "")).strip()
+        if text:
+            yield text

@@ -116,8 +116,9 @@ async def test_chat_stream_yields_runtime_chunks(monkeypatch):
             yield b"data: hello"
             yield b"data: world"
 
-    async def _fake_runtime_response(prompt):
+    async def _fake_runtime_response(prompt, stream=False):
         assert prompt == "USER: Hi"
+        assert stream is True
         return {
             "contentType": "text/event-stream",
             "response": _StreamLines(),

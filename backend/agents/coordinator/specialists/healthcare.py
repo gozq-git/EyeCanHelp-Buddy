@@ -1,5 +1,5 @@
 """Healthcare specialist plug-in — RAG over the TTSH medical knowledge base."""
-from llm import invoke_model
+from llm import invoke_model, invoke_model_stream
 from specialists.base import CoordinatorState, Specialist
 from specialists.registry import register
 from tools.kb_tools import format_kb_response, search_medical_kb
@@ -20,6 +20,27 @@ Always:
 _NO_INFO = "No information available."
 
 
+def _build_healthcare_prompt(query: str):
+    results = search_medical_kb(query)
+    if not results:
+        return None, []
+
+    if any("error" in item for item in results if isinstance(item, dict)):
+        return None, results
+
+    kb_context = format_kb_response(query, results)
+    if not kb_context or "could not find relevant information" in kb_context.lower():
+        return None, results
+
+    healthcare_prompt = (
+        f"User query:\n{query}\n\n"
+        "Retrieved medical knowledge base evidence:\n"
+        f"{kb_context}\n\n"
+        "Provide the best possible answer grounded only in the retrieved evidence."
+    )
+    return healthcare_prompt, results
+
+
 @register
 class HealthcareSpecialist(Specialist):
     name = "healthcare"
@@ -27,25 +48,28 @@ class HealthcareSpecialist(Specialist):
 
     def handle(self, state: CoordinatorState) -> CoordinatorState:
         query = state.get("kb_query", state.get("prompt", ""))
-        results = search_medical_kb(query)
-        if not results:
-            return {"kb_results": [], "response": _NO_INFO}
-
-        if any("error" in item for item in results if isinstance(item, dict)):
+        healthcare_prompt, results = _build_healthcare_prompt(query)
+        if not healthcare_prompt:
             return {"kb_results": results, "response": _NO_INFO}
 
-        kb_context = format_kb_response(query, results)
-        if not kb_context or "could not find relevant information" in kb_context.lower():
-            return {"kb_results": results, "response": _NO_INFO}
-
-        healthcare_prompt = (
-            f"User query:\n{query}\n\n"
-            "Retrieved medical knowledge base evidence:\n"
-            f"{kb_context}\n\n"
-            "Provide the best possible answer grounded only in the retrieved evidence."
-        )
         answer = invoke_model(HEALTHCARE_SYSTEM_PROMPT, healthcare_prompt)
         if not answer.strip():
             return {"kb_results": results, "response": _NO_INFO}
 
         return {"kb_results": results, "response": answer}
+
+    def handle_stream(self, state: CoordinatorState):
+        query = state.get("kb_query", state.get("prompt", ""))
+        healthcare_prompt, _results = _build_healthcare_prompt(query)
+        if not healthcare_prompt:
+            yield _NO_INFO
+            return
+
+        yielded = False
+        for token in invoke_model_stream(HEALTHCARE_SYSTEM_PROMPT, healthcare_prompt):
+            if token:
+                yielded = True
+                yield token
+
+        if not yielded:
+            yield _NO_INFO

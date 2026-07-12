@@ -5,6 +5,7 @@ can call the model without importing the core (which would create a circular
 import: core -> specialists -> core).
 """
 import os
+from collections.abc import Iterator
 
 import boto3
 
@@ -31,6 +32,37 @@ def _collect_stream_text(response: dict) -> str:
         if text:
             text_parts.append(str(text))
     return "".join(text_parts).strip()
+
+
+def invoke_model_stream(system_prompt: str, user_prompt: str) -> Iterator[str]:
+    """Yield Bedrock ``converse_stream`` text deltas.
+
+    This is used by the coordinator runtime when the caller requests streaming
+    so tokens can be forwarded immediately instead of waiting for full model
+    completion.
+    """
+    model_name = os.getenv("BEDROCK_MODEL_ID", "global.anthropic.claude-sonnet-4-6")
+    region = os.getenv("AWS_REGION") or os.getenv("AWS_DEFAULT_REGION") or "us-east-1"
+    temperature = float(os.getenv("BEDROCK_TEMPERATURE", "0.2"))
+
+    try:
+        client = boto3.client("bedrock-runtime", region_name=region)
+        args = _build_converse_args(system_prompt, user_prompt, temperature)
+        response = client.converse_stream(modelId=model_name, **args)
+
+        stream = response.get("stream")
+        if stream is None:
+            return
+
+        for event in stream:
+            if not isinstance(event, dict):
+                continue
+            delta = event.get("contentBlockDelta", {}).get("delta", {})
+            text = delta.get("text") if isinstance(delta, dict) else None
+            if text:
+                yield str(text)
+    except Exception as exc:
+        yield f"I could not generate a model response from Bedrock: {str(exc)}"
 
 
 def invoke_model(system_prompt: str, user_prompt: str) -> str:

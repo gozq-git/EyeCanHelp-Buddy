@@ -144,6 +144,27 @@ def _triage_route_edge(state: CoordinatorState) -> str:
     return state.get("route", _DEFAULT_ROUTE)
 
 
+def route_request(prompt: str) -> CoordinatorState:
+    """Resolve escalation/triage route without executing specialist nodes."""
+    state: CoordinatorState = {"prompt": prompt}
+
+    escalation_update = _escalate_node(state)
+    state.update(escalation_update)
+    if state.get("route") == "escalate":
+        return state
+
+    triage_update = _make_triage_node(get_specialists())(state)
+    state.update(triage_update)
+    return state
+
+
+def get_specialist_by_name(name: str):
+    for specialist in get_specialists():
+        if specialist.name == name:
+            return specialist
+    return None
+
+
 def create_agent():
     specs = get_specialists()
     if not specs:
