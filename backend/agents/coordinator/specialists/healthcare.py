@@ -96,15 +96,39 @@ def _sanitize_rewrite(candidate: str, fallback: str) -> str:
     return rewritten
 
 
-def _rewrite_for_retrieval(query: str) -> str:
+def _extract_chat_turns(prompt: str) -> list[str]:
+    return [line.strip() for line in (prompt or "").splitlines() if line.strip()]
+
+
+def _resolve_previous_chat_context(query: str, prompt: str) -> list[str]:
+    turns = _extract_chat_turns(prompt)
+    if not turns:
+        return []
+
+    latest = (query or "").strip()
+    for idx in range(len(turns) - 1, -1, -1):
+        line = turns[idx]
+        if line.upper().startswith("USER:") and line[5:].strip() == latest:
+            return turns[:idx] + turns[idx + 1 :]
+
+    return turns
+
+
+def _rewrite_for_retrieval(query: str, previous_chat_context: list[str] | None = None) -> str:
+    context_block = ""
+    turns = previous_chat_context or []
+    if turns:
+        history = "\n".join(turns)
+        context_block = f"Previous chat context:\n{history}\n\n"
+
     model_output = invoke_model(
         _QUERY_REWRITE_SYSTEM_PROMPT,
-        f"User message:\n{query}\n\nStandalone retrieval query:",
+        f"{context_block}User message:\n{query}\n\nStandalone retrieval query:",
     )
     return _sanitize_rewrite(model_output, query)
 
 
-def _resolve_retrieval_query(query: str) -> str:
+def _resolve_retrieval_query(query: str, prompt: str = "") -> str:
     cleaned = (query or "").strip()
     if not cleaned:
         return ""
@@ -116,15 +140,16 @@ def _resolve_retrieval_query(query: str) -> str:
     if not _should_rewrite_query(cleaned):
         return cleaned
 
-    rewritten = _rewrite_for_retrieval(cleaned)
+    previous_chat_context = _resolve_previous_chat_context(cleaned, prompt)
+    rewritten = _rewrite_for_retrieval(cleaned, previous_chat_context=previous_chat_context)
     if rewritten != cleaned:
         logger.info("Healthcare KB rewrite applied: '%s' -> '%s'", cleaned, rewritten)
     return rewritten
 
 
-def _build_healthcare_prompt(query: str):
+def _build_healthcare_prompt(query: str, prompt: str = ""):
     original_query = (query or "").strip()
-    retrieval_query = _resolve_retrieval_query(original_query)
+    retrieval_query = _resolve_retrieval_query(original_query, prompt=prompt)
 
     results = search_medical_kb(retrieval_query)
     if not results:
@@ -158,7 +183,8 @@ class HealthcareSpecialist(Specialist):
 
     def handle(self, state: CoordinatorState) -> CoordinatorState:
         query = state.get("kb_query", state.get("prompt", ""))
-        healthcare_prompt, results = _build_healthcare_prompt(query)
+        prompt = state.get("prompt", "")
+        healthcare_prompt, results = _build_healthcare_prompt(query, prompt=prompt)
         if not healthcare_prompt:
             return {"kb_results": results, "response": _NO_INFO}
 
@@ -170,7 +196,8 @@ class HealthcareSpecialist(Specialist):
 
     def handle_stream(self, state: CoordinatorState):
         query = state.get("kb_query", state.get("prompt", ""))
-        healthcare_prompt, _results = _build_healthcare_prompt(query)
+        prompt = state.get("prompt", "")
+        healthcare_prompt, _results = _build_healthcare_prompt(query, prompt=prompt)
         if not healthcare_prompt:
             yield _NO_INFO
             return
