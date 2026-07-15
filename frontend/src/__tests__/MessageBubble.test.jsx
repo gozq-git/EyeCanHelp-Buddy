@@ -4,11 +4,12 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import MessageBubble from '../components/MessageBubble'
 
 describe('MessageBubble — welcome type', () => {
-  it('renders the 3 quick-reply option buttons by default, without Return Menu', () => {
+  it('renders the quick-reply option buttons by default, without Return Menu', () => {
     render(<MessageBubble role="bot" type="welcome" content="" onQuickReply={() => {}} />)
     expect(screen.getByRole('button', { name: 'General Enquiry' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Fill up pre-procedure' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Fill up post-operation checklist' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Appointment' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Return Menu' })).not.toBeInTheDocument()
   })
 

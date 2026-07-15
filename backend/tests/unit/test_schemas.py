@@ -6,8 +6,25 @@ from pydantic import ValidationError
 from schemas.patient import PatientSchema
 from schemas.payment import PaymentSchema
 from schemas.patient_record import PatientRecordCreate, PatientRecordResponse
+from schemas.ivt import IVTSchema
 
 pytestmark = pytest.mark.unit
+
+
+def test_ivt_schema_defaults_and_fields():
+    ivt = IVTSchema(
+        ivt_id="IVT001",
+        ivt_name="Intravitreal Faricimab",
+        ivt_eyes="OD",
+        ivt_medication="Faricimab (Vabysmo)",
+    )
+    assert ivt.resourceType == "MedicationRequest"
+    assert ivt.ivt_eyes == "OD"
+
+
+def test_ivt_schema_rejects_missing_field():
+    with pytest.raises(ValidationError):
+        IVTSchema(ivt_id="IVT001", ivt_name="x", ivt_eyes="OD")  # missing ivt_medication
 
 
 def test_patient_schema_defaults_resource_type():

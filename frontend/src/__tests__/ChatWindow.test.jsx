@@ -81,11 +81,12 @@ const MOCK_ACK_RESPONSE = {
 describe('ChatWindow — welcome state', () => {
   beforeEach(() => { vi.clearAllMocks() })
 
-  it('renders the three quick-reply option pills on load (no Return Menu)', () => {
+  it('renders the quick-reply option pills on load (incl. Appointment, no Return Menu)', () => {
     render(<ChatWindow />)
     expect(screen.getByRole('button', { name: 'General Enquiry' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Fill up pre-procedure' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Fill up post-operation checklist' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Appointment' })).toBeInTheDocument()
     // Return Menu is redundant on the first welcome bubble — you're already at the menu.
     expect(screen.queryByRole('button', { name: 'Return Menu' })).not.toBeInTheDocument()
   })
@@ -210,43 +211,49 @@ describe('ChatWindow — Pre-Procedure flow', () => {
     expect(screen.getByRole('button', { name: 'No' })).toBeInTheDocument()
   })
 
-  it('Yes/No chips also appear for the stroke question after q_admission is answered', async () => {
+  it('Yes/No chips also appear for the next question after the first is answered', async () => {
     render(<ChatWindow />)
     await userEvent.click(screen.getByRole('button', { name: 'Fill up pre-procedure' }))
     await userEvent.click(screen.getByRole('button', { name: /singpass login/i }))
-    // Existing patient → ask_update; click Yes to advance into the 3-question flow.
+    // Existing patient → ask_update; click Yes to advance into the question flow.
     await userEvent.click(screen.getByRole('button', { name: 'Yes' }))
-    await userEvent.click(screen.getByRole('button', { name: 'No' })) // q_admission
+    await userEvent.click(screen.getByRole('button', { name: 'No' })) // q_stroke
     expect(screen.getByRole('button', { name: 'Yes' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'No' })).toBeInTheDocument()
   })
 
-  it('Right/Left/Both eye chips appear after both Yes/No questions are answered', async () => {
+  it('Right/Left/Both eye chips appear after all four Yes/No questions are answered', async () => {
     render(<ChatWindow />)
     await userEvent.click(screen.getByRole('button', { name: 'Fill up pre-procedure' }))
     await userEvent.click(screen.getByRole('button', { name: /singpass login/i }))
     await userEvent.click(screen.getByRole('button', { name: 'Yes' })) // ask_update
-    await userEvent.click(screen.getByRole('button', { name: 'No' }))  // q_admission
     await userEvent.click(screen.getByRole('button', { name: 'No' }))  // q_stroke
+    await userEvent.click(screen.getByRole('button', { name: 'No' }))  // q_admission
+    await userEvent.click(screen.getByRole('button', { name: 'No' }))  // q_antibiotics
+    await userEvent.click(screen.getByRole('button', { name: 'No' }))  // q_pregnant
     expect(screen.getByRole('button', { name: 'Right' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Left' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Both' })).toBeInTheDocument()
   })
 
-  it('record_last3mths_admission is true when user answers Yes to Q1', async () => {
+  it('maps the four acknowledgement-form answers onto the patient record', async () => {
     render(<ChatWindow />)
     await userEvent.click(screen.getByRole('button', { name: 'Fill up pre-procedure' }))
     await userEvent.click(screen.getByRole('button', { name: /singpass login/i }))
     await userEvent.click(screen.getByRole('button', { name: 'Yes' }))   // ask_update
-    await userEvent.click(screen.getByRole('button', { name: 'Yes' }))   // q_admission = true
     await userEvent.click(screen.getByRole('button', { name: 'No' }))    // q_stroke = false
+    await userEvent.click(screen.getByRole('button', { name: 'Yes' }))   // q_admission = true
+    await userEvent.click(screen.getByRole('button', { name: 'Yes' }))   // q_antibiotics = true
+    await userEvent.click(screen.getByRole('button', { name: 'No' }))    // q_pregnant = false
     await userEvent.click(screen.getByRole('button', { name: 'Right' })) // q_eye
     await userEvent.click(screen.getByRole('button', { name: 'Yes' }))   // cost_confirm
     await userEvent.click(screen.getByRole('button', { name: 'Medisave' })) // payment_mode → submit
     await waitFor(() => expect(submitAcknowledgement).toHaveBeenCalledOnce())
     const [payload] = submitAcknowledgement.mock.calls[0]
-    expect(payload.patient_record.record_last3mths_admission).toBe(true)
     expect(payload.patient_record.record_stroke_heartAtt_last6mths).toBe(false)
+    expect(payload.patient_record.record_last3mths_admission).toBe(true)
+    expect(payload.patient_record.record_taking_antibiotics).toBe(true)
+    expect(payload.patient_record.record_pregnant).toBe(false)
   })
 
   it('record_eyes is OD when user selects Right', async () => {
@@ -254,8 +261,10 @@ describe('ChatWindow — Pre-Procedure flow', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Fill up pre-procedure' }))
     await userEvent.click(screen.getByRole('button', { name: /singpass login/i }))
     await userEvent.click(screen.getByRole('button', { name: 'Yes' }))   // ask_update
-    await userEvent.click(screen.getByRole('button', { name: 'No' }))    // q_admission
     await userEvent.click(screen.getByRole('button', { name: 'No' }))    // q_stroke
+    await userEvent.click(screen.getByRole('button', { name: 'No' }))    // q_admission
+    await userEvent.click(screen.getByRole('button', { name: 'No' }))    // q_antibiotics
+    await userEvent.click(screen.getByRole('button', { name: 'No' }))    // q_pregnant
     await userEvent.click(screen.getByRole('button', { name: 'Right' })) // q_eye
     await userEvent.click(screen.getByRole('button', { name: 'Yes' }))   // cost_confirm
     await userEvent.click(screen.getByRole('button', { name: 'Medisave' })) // payment_mode → submit
@@ -269,8 +278,10 @@ describe('ChatWindow — Pre-Procedure flow', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Fill up pre-procedure' }))
     await userEvent.click(screen.getByRole('button', { name: /singpass login/i }))
     await userEvent.click(screen.getByRole('button', { name: 'Yes' }))   // ask_update
-    await userEvent.click(screen.getByRole('button', { name: 'No' }))    // q_admission
     await userEvent.click(screen.getByRole('button', { name: 'No' }))    // q_stroke
+    await userEvent.click(screen.getByRole('button', { name: 'No' }))    // q_admission
+    await userEvent.click(screen.getByRole('button', { name: 'No' }))    // q_antibiotics
+    await userEvent.click(screen.getByRole('button', { name: 'No' }))    // q_pregnant
     await userEvent.click(screen.getByRole('button', { name: 'Left' }))  // q_eye
     await userEvent.click(screen.getByRole('button', { name: 'Yes' }))   // cost_confirm
     await userEvent.click(screen.getByRole('button', { name: 'Medisave' })) // payment_mode → submit
@@ -284,8 +295,10 @@ describe('ChatWindow — Pre-Procedure flow', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Fill up pre-procedure' }))
     await userEvent.click(screen.getByRole('button', { name: /singpass login/i }))
     await userEvent.click(screen.getByRole('button', { name: 'Yes' }))   // ask_update
-    await userEvent.click(screen.getByRole('button', { name: 'No' }))    // q_admission
     await userEvent.click(screen.getByRole('button', { name: 'No' }))    // q_stroke
+    await userEvent.click(screen.getByRole('button', { name: 'No' }))    // q_admission
+    await userEvent.click(screen.getByRole('button', { name: 'No' }))    // q_antibiotics
+    await userEvent.click(screen.getByRole('button', { name: 'No' }))    // q_pregnant
     await userEvent.click(screen.getByRole('button', { name: 'Both' }))  // q_eye
     await userEvent.click(screen.getByRole('button', { name: 'Yes' }))   // cost_confirm
     await userEvent.click(screen.getByRole('button', { name: 'Medisave' })) // payment_mode → submit
@@ -294,13 +307,71 @@ describe('ChatWindow — Pre-Procedure flow', () => {
     expect(payload.patient_record.record_eyes).toBe('OU')
   })
 
+  it('renders the acknowledgement doc with the four questions after submission', async () => {
+    render(<ChatWindow />)
+    await userEvent.click(screen.getByRole('button', { name: 'Fill up pre-procedure' }))
+    await userEvent.click(screen.getByRole('button', { name: /singpass login/i }))
+    await userEvent.click(screen.getByRole('button', { name: 'Yes' }))   // ask_update
+    await userEvent.click(screen.getByRole('button', { name: 'No' }))    // q_stroke
+    await userEvent.click(screen.getByRole('button', { name: 'No' }))    // q_admission
+    await userEvent.click(screen.getByRole('button', { name: 'No' }))    // q_antibiotics
+    await userEvent.click(screen.getByRole('button', { name: 'No' }))    // q_pregnant
+    await userEvent.click(screen.getByRole('button', { name: 'Right' })) // q_eye
+    await userEvent.click(screen.getByRole('button', { name: 'Yes' }))   // cost_confirm
+    await userEvent.click(screen.getByRole('button', { name: 'Medisave' })) // payment_mode → submit
+    await waitFor(() => {
+      expect(screen.getByText('Pre-Procedure Acknowledgement Form')).toBeInTheDocument()
+    })
+    // "* Circle as appropriate" is unique to the doc (the question text also appears in
+    // the chat bubbles), confirming the acknowledgement form itself rendered.
+    expect(screen.getByText(/Circle as appropriate/i)).toBeInTheDocument()
+  })
+
+  it('shows the acknowledgement form after the 4 questions and before the eye question', async () => {
+    render(<ChatWindow />)
+    await userEvent.click(screen.getByRole('button', { name: 'Fill up pre-procedure' }))
+    await userEvent.click(screen.getByRole('button', { name: /singpass login/i }))
+    await userEvent.click(screen.getByRole('button', { name: 'Yes' }))   // ask_update
+    await userEvent.click(screen.getByRole('button', { name: 'No' }))    // q_stroke
+    await userEvent.click(screen.getByRole('button', { name: 'No' }))    // q_admission
+    await userEvent.click(screen.getByRole('button', { name: 'No' }))    // q_antibiotics
+    await userEvent.click(screen.getByRole('button', { name: 'No' }))    // q_pregnant → shows the form
+    // The form is displayed now, and only then are the eye chips offered.
+    expect(await screen.findByText(/Circle as appropriate/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Right' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Left' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Both' })).toBeInTheDocument()
+  })
+
+  it('saves the acknowledgement and shows the doc even when the cost is declined', async () => {
+    render(<ChatWindow />)
+    await userEvent.click(screen.getByRole('button', { name: 'Fill up pre-procedure' }))
+    await userEvent.click(screen.getByRole('button', { name: /singpass login/i }))
+    await userEvent.click(screen.getByRole('button', { name: 'Yes' }))   // ask_update
+    await userEvent.click(screen.getByRole('button', { name: 'No' }))    // q_stroke
+    await userEvent.click(screen.getByRole('button', { name: 'Yes' }))   // q_admission = true
+    await userEvent.click(screen.getByRole('button', { name: 'No' }))    // q_antibiotics
+    await userEvent.click(screen.getByRole('button', { name: 'No' }))    // q_pregnant
+    await userEvent.click(screen.getByRole('button', { name: 'Right' })) // q_eye
+    await userEvent.click(screen.getByRole('button', { name: 'No' }))    // cost_confirm = declined
+    // The record is still persisted even though the patient declined the cost.
+    await waitFor(() => expect(submitAcknowledgement).toHaveBeenCalledOnce())
+    const [payload] = submitAcknowledgement.mock.calls[0]
+    expect(payload.patient_record.record_last3mths_admission).toBe(true)
+    expect(await screen.findByText('Pre-Procedure Acknowledgement Form')).toBeInTheDocument()
+    // No financial doc on the decline path.
+    expect(screen.queryByText(/Financial Counselling & Advice/)).not.toBeInTheDocument()
+  })
+
   it('renders FinancialCounsellingDoc after submitAcknowledgement resolves', async () => {
     render(<ChatWindow />)
     await userEvent.click(screen.getByRole('button', { name: 'Fill up pre-procedure' }))
     await userEvent.click(screen.getByRole('button', { name: /singpass login/i }))
     await userEvent.click(screen.getByRole('button', { name: 'Yes' }))   // ask_update
-    await userEvent.click(screen.getByRole('button', { name: 'No' }))    // q_admission
     await userEvent.click(screen.getByRole('button', { name: 'No' }))    // q_stroke
+    await userEvent.click(screen.getByRole('button', { name: 'No' }))    // q_admission
+    await userEvent.click(screen.getByRole('button', { name: 'No' }))    // q_antibiotics
+    await userEvent.click(screen.getByRole('button', { name: 'No' }))    // q_pregnant
     await userEvent.click(screen.getByRole('button', { name: 'Right' })) // q_eye
     await userEvent.click(screen.getByRole('button', { name: 'Yes' }))   // cost_confirm
     await userEvent.click(screen.getByRole('button', { name: 'Medisave' })) // payment_mode → submit
@@ -315,8 +386,10 @@ describe('ChatWindow — Pre-Procedure flow', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Fill up pre-procedure' }))
     await userEvent.click(screen.getByRole('button', { name: /singpass login/i }))
     await userEvent.click(screen.getByRole('button', { name: 'Yes' }))   // ask_update
-    await userEvent.click(screen.getByRole('button', { name: 'No' }))    // q_admission
     await userEvent.click(screen.getByRole('button', { name: 'No' }))    // q_stroke
+    await userEvent.click(screen.getByRole('button', { name: 'No' }))    // q_admission
+    await userEvent.click(screen.getByRole('button', { name: 'No' }))    // q_antibiotics
+    await userEvent.click(screen.getByRole('button', { name: 'No' }))    // q_pregnant
     await userEvent.click(screen.getByRole('button', { name: 'Right' })) // q_eye
     await userEvent.click(screen.getByRole('button', { name: 'Yes' }))   // cost_confirm
     await userEvent.click(screen.getByRole('button', { name: 'Medisave' })) // payment_mode → submit (rejects)
@@ -330,8 +403,10 @@ describe('ChatWindow — Pre-Procedure flow', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Fill up pre-procedure' }))
     await userEvent.click(screen.getByRole('button', { name: /singpass login/i }))
     await userEvent.click(screen.getByRole('button', { name: 'Yes' }))   // ask_update
-    await userEvent.click(screen.getByRole('button', { name: 'No' }))    // q_admission
     await userEvent.click(screen.getByRole('button', { name: 'No' }))    // q_stroke
+    await userEvent.click(screen.getByRole('button', { name: 'No' }))    // q_admission
+    await userEvent.click(screen.getByRole('button', { name: 'No' }))    // q_antibiotics
+    await userEvent.click(screen.getByRole('button', { name: 'No' }))    // q_pregnant
     await userEvent.click(screen.getByRole('button', { name: 'Right' })) // q_eye
     await userEvent.click(screen.getByRole('button', { name: 'Yes' }))   // cost_confirm
     await userEvent.click(screen.getByRole('button', { name: 'Medisave' })) // payment_mode → submit
@@ -351,17 +426,18 @@ describe('ChatWindow — Pre-Procedure input validation', () => {
     getLatestAcknowledgement.mockRejectedValue(new Error('no record'))
   })
 
+  // Ordered acknowledgement-form questions; each is answered 'No' to reach a later one.
+  const QUESTION_ORDER = ['q_stroke', 'q_admission', 'q_antibiotics', 'q_pregnant', 'q_eye']
+
   async function reachStep(step) {
     render(<ChatWindow />)
     await userEvent.click(screen.getByRole('button', { name: 'Fill up pre-procedure' }))
     await userEvent.click(screen.getByRole('button', { name: /singpass login/i }))
-    // Existing patient → ask_update; click Yes to enter the 3-question flow.
+    // Existing patient → ask_update; click Yes to enter the question flow (starts at q_stroke).
     await userEvent.click(screen.getByRole('button', { name: 'Yes' }))
-    if (step === 'q_stroke' || step === 'q_eye') {
-      await userEvent.click(screen.getByRole('button', { name: 'No' })) // answer q_admission
-    }
-    if (step === 'q_eye') {
-      await userEvent.click(screen.getByRole('button', { name: 'No' })) // answer q_stroke
+    // Answer 'No' to each medical question preceding `step`.
+    for (let i = 0; i < QUESTION_ORDER.indexOf(step); i++) {
+      await userEvent.click(screen.getByRole('button', { name: 'No' }))
     }
   }
 
@@ -387,7 +463,7 @@ describe('ChatWindow — Pre-Procedure input validation', () => {
     await userEvent.keyboard('{Enter}')
     await userEvent.type(screen.getByRole('textbox'), 'no')
     await userEvent.keyboard('{Enter}')
-    // Now at q_stroke — Yes/No chips still present for the next question
+    // Advanced to the next medical question — Yes/No chips still present
     expect(screen.getByRole('button', { name: 'Yes' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'No' })).toBeInTheDocument()
   })
@@ -519,5 +595,21 @@ describe('ChatWindow — Return Menu', () => {
     await userEvent.click(returnMenuButtons.at(-1))
     // Two welcome bubbles are now in the thread → at least 2 "General Enquiry" buttons
     expect(screen.getAllByRole('button', { name: 'General Enquiry' }).length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('clicking Appointment from the main menu posts a placeholder message', async () => {
+    render(<ChatWindow />)
+    // Appointment lives only in the main welcome menu, not the completion bar.
+    await userEvent.click(screen.getByRole('button', { name: 'Appointment' }))
+    expect(screen.getByText(/Appointment booking is coming soon/i)).toBeInTheDocument()
+  })
+
+  it('does not add Appointment to the flow-completion bar (Return Menu only)', async () => {
+    render(<ChatWindow />)
+    await userEvent.click(screen.getByRole('button', { name: 'General Enquiry' }))
+    // The completion bar shows Return Menu; the only Appointment button is the
+    // historical one still in the welcome bubble, so there is exactly one.
+    expect(screen.getByRole('button', { name: 'Return Menu' })).toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: 'Appointment' })).toHaveLength(1)
   })
 })
