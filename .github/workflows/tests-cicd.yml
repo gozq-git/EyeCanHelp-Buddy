@@ -79,7 +79,9 @@ jobs:
       - name: Run Playwright (starts Vite via webServer)
         working-directory: e2e
         timeout-minutes: 5 # Force fails the step if it hangs
-        run: npx playwright test
+        # Exclude @integration specs: they require a real backend on :8000, which
+        # this job does not start (the mocked specs stub /api/** at the network layer).
+        run: npx playwright test --grep-invert "@integration"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
