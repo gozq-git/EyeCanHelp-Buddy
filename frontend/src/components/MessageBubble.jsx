@@ -5,11 +5,13 @@ import EyeLogoSVG from './EyeLogoSVG'
 import SingpassLoginButton from './SingpassLoginButton'
 import FinancialCounsellingDoc from './FinancialCounsellingDoc'
 import PostOpChecklistDoc from './PostOpChecklistDoc'
+import AcknowledgementDoc from './AcknowledgementDoc'
 
 const QUICK_REPLY_OPTIONS = [
   'General Enquiry',
   'Fill up pre-procedure',
   'Fill up post-operation checklist',
+  'Appointment',
 ]
 
 // 'Return Menu' is redundant on the first welcome bubble (you're already at the
@@ -85,6 +87,14 @@ export default function MessageBubble({ role, type, content, formData, onQuickRe
     )
   }
 
+  if (type === 'acknowledgement_doc') {
+    return (
+      <div style={{ marginBottom: '12px', maxWidth: '620px' }}>
+        <AcknowledgementDoc formData={formData} />
+      </div>
+    )
+  }
+
   if (type === 'financial_doc') {
     return (
       <div style={{ marginBottom: '12px', maxWidth: '620px' }}>
@@ -115,7 +125,7 @@ export default function MessageBubble({ role, type, content, formData, onQuickRe
   return (
     <div style={{ display: 'flex', alignItems: 'flex-end', gap: '6px', marginBottom: '8px' }}>
       <EyeLogoSVG size={24} />
-      <div style={{
+      <div data-testid="bot-message" style={{
         maxWidth: '75%',
         padding: '10px 14px',
         borderRadius: '4px 20px 20px 20px',

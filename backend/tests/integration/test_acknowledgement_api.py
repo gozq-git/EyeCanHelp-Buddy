@@ -59,3 +59,39 @@ def test_submit_rejects_invalid_payment_mode(client):
     bad = {**ACK_PAYLOAD, "payment": {**ACK_PAYLOAD["payment"], "payment_mode": "Crypto"}}
     resp = client.post("/api/acknowledgement", json=bad)
     assert resp.status_code == 422
+
+
+def test_four_acknowledgement_questions_round_trip(client):
+    """The four pre-procedure questions (stroke/heart attack, hospitalisation,
+    antibiotics, pregnancy) must persist through the API into Mongo and come
+    back unchanged via /latest."""
+    record = {
+        **ACK_PAYLOAD["patient_record"],
+        "record_stroke_heartAtt_last6mths": True,
+        "record_last3mths_admission": True,
+        "record_taking_antibiotics": True,
+        "record_pregnant": True,
+    }
+    payload = {**ACK_PAYLOAD, "patient_record": record}
+
+    resp = client.post("/api/acknowledgement", json=payload)
+    assert resp.status_code == 200
+    saved = resp.json()["record"]
+    assert saved["record_stroke_heartAtt_last6mths"] is True
+    assert saved["record_last3mths_admission"] is True
+    assert saved["record_taking_antibiotics"] is True
+    assert saved["record_pregnant"] is True
+
+    latest = client.get("/api/acknowledgement/latest/P001").json()
+    assert latest["record_stroke_heartAtt_last6mths"] is True
+    assert latest["record_last3mths_admission"] is True
+    assert latest["record_taking_antibiotics"] is True
+    assert latest["record_pregnant"] is True
+
+
+def test_acknowledgement_question_missing_is_rejected(client):
+    """Each of the four questions is a required boolean — omitting one is a 422."""
+    record = {k: v for k, v in ACK_PAYLOAD["patient_record"].items() if k != "record_taking_antibiotics"}
+    payload = {**ACK_PAYLOAD, "patient_record": record}
+    resp = client.post("/api/acknowledgement", json=payload)
+    assert resp.status_code == 422

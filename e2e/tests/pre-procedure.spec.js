@@ -12,10 +12,12 @@ test.describe('Pre-procedure acknowledgement flow', () => {
     await singpassLogin(page, 'P001')
     await expect(page.getByText(/Welcome back, Tan Ah Kow/i)).toBeVisible({ timeout: 10_000 })
 
-    // ask_update → 3 questions → cost confirm → payment mode → submit
+    // ask_update → 4 medical questions → eye → cost confirm → payment mode → submit
     await page.getByRole('button', { name: 'Yes' }).click()      // ask_update
-    await page.getByRole('button', { name: 'No' }).click()       // q_admission
     await page.getByRole('button', { name: 'No' }).click()       // q_stroke
+    await page.getByRole('button', { name: 'No' }).click()       // q_admission
+    await page.getByRole('button', { name: 'No' }).click()       // q_antibiotics
+    await page.getByRole('button', { name: 'No' }).click()       // q_pregnant
     await page.getByRole('button', { name: 'Right' }).click()    // q_eye → OD
     await page.getByRole('button', { name: 'Yes' }).click()                  // cost_confirm
     await page.getByRole('button', { name: 'Medisave', exact: true }).click() // payment_mode → submit

@@ -6,7 +6,7 @@ import { sendChatMessage, sendChatMessageStream, submitAcknowledgement, getEpicR
 let _msgId = 1
 const nextId = () => ++_msgId
 
-const INIT_FORM = { last3mths_admission: false, stroke_heartAtt_last6mths: false, record_eyes: 'OD', payment_mode: 'Medisave' }
+const INIT_FORM = { last3mths_admission: false, stroke_heartAtt_last6mths: false, taking_antibiotics: false, pregnant: false, record_eyes: 'OD', payment_mode: 'Medisave' }
 const INIT_MESSAGES = [{ id: 1, role: 'bot', type: 'welcome', content: '' }]
 
 // Total cost shown to the patient before payment-mode selection. Mirrors the default
@@ -27,8 +27,8 @@ function buildPayload(answers, epicRecord) {
       record_validity_of_consent: true,
       record_last3mths_admission: answers.last3mths_admission,
       record_stroke_heartAtt_last6mths: answers.stroke_heartAtt_last6mths,
-      record_taking_antibiotics: epicRecord?.record_taking_antibiotics || false,
-      record_pregnant: epicRecord?.record_pregnant || false,
+      record_taking_antibiotics: answers.taking_antibiotics,
+      record_pregnant: answers.pregnant,
     },
     payment: {
       payment_id: `PAY-${patientId}-${Date.now()}`,
@@ -38,6 +38,20 @@ function buildPayload(answers, epicRecord) {
       payment_estCostPerInjection: 123,
       payment_mode: answers.payment_mode || 'Medisave',
     },
+  }
+}
+
+// Shapes the four acknowledgement-form answers for AcknowledgementDoc. Accepts the raw
+// booleans so it works from both live formAnswers and a saved (record_-prefixed) record.
+function buildAckFormData({ patientName, nric, dateIso, strokeHeartAtt, hospitalised, antibiotics, pregnant }) {
+  return {
+    patientName: patientName || '',
+    nric: nric || '',
+    date: formatDate(dateIso),
+    strokeHeartAtt: !!strokeHeartAtt,
+    hospitalised: !!hospitalised,
+    antibiotics: !!antibiotics,
+    pregnant: !!pregnant,
   }
 }
 
@@ -124,6 +138,9 @@ export default function ChatWindow({ onBack }) {
       setPostOpStep('login')
       addMsg({ role: 'bot', type: 'text', content: 'To proceed with the checklist, would you please sign in below?' })
       addMsg({ role: 'bot', type: 'singpass', content: '' })
+    } else if (label === 'Appointment') {
+      // Placeholder — the real appointment-booking flow will be wired in later.
+      addMsg({ role: 'bot', type: 'text', content: 'Appointment booking is coming soon. In the meantime, please contact the clinic to schedule your appointment.' })
     } else if (label === 'Return Menu') {
       setMode('welcome')
       setPreProcStep('login')
@@ -258,8 +275,8 @@ export default function ChatWindow({ onBack }) {
           addMsg({ role: 'bot', type: 'postop_doc', content: '', formData: null })
           setPostOpStep('complete')
         } else {
-          addMsg({ role: 'bot', type: 'text', content: 'We will now proceed with the form.\n\nDo you have any hospital admission in the last 3 months?\n• Yes / No' })
-          setPreProcStep('q_admission')
+          addMsg({ role: 'bot', type: 'text', content: 'We will now proceed with the form.\n\nHave you had a recent stroke or heart attack in the past 6 months?\n• Yes / No' })
+          setPreProcStep('q_stroke')
         }
       } catch {
         addMsg({ role: 'bot', type: 'text', content: 'Sorry, there was an error saving your profile. Please try again.' })
@@ -288,6 +305,20 @@ export default function ChatWindow({ onBack }) {
           addMsg({ role: 'bot', type: 'text', content: 'Here is your existing form.' })
           addMsg({
             role: 'bot',
+            type: 'acknowledgement_doc',
+            content: '',
+            formData: buildAckFormData({
+              patientName: latest.record_name || epicRecord?.record_name || '',
+              nric: currentPatientId || latest.patient_id || '',
+              dateIso: latest.issued,
+              strokeHeartAtt: latest.record_stroke_heartAtt_last6mths,
+              hospitalised: latest.record_last3mths_admission,
+              antibiotics: latest.record_taking_antibiotics,
+              pregnant: latest.record_pregnant,
+            }),
+          })
+          addMsg({
+            role: 'bot',
             type: 'financial_doc',
             content: '',
             formData: {
@@ -309,6 +340,20 @@ export default function ChatWindow({ onBack }) {
           addMsg({ role: 'bot', type: 'text', content: 'Here is your existing form.' })
           addMsg({
             role: 'bot',
+            type: 'acknowledgement_doc',
+            content: '',
+            formData: buildAckFormData({
+              patientName: epicRecord?.record_name || '',
+              nric: currentPatientId || epicRecord?.patient_id || '',
+              dateIso: epicRecord?.issued,
+              strokeHeartAtt: epicRecord?.record_stroke_heartAtt_last6mths,
+              hospitalised: epicRecord?.record_last3mths_admission,
+              antibiotics: epicRecord?.record_taking_antibiotics,
+              pregnant: epicRecord?.record_pregnant,
+            }),
+          })
+          addMsg({
+            role: 'bot',
             type: 'financial_doc',
             content: '',
             formData: {
@@ -328,29 +373,64 @@ export default function ChatWindow({ onBack }) {
           setLoading(false)
         }
       } else {
-        // Update — proceed to the 3 questions
-        addMsg({ role: 'bot', type: 'text', content: 'Do you have any hospital admission in the last 3 months?\n• Yes / No' })
-        setPreProcStep('q_admission')
+        // Update — proceed to the acknowledgement-form questions
+        addMsg({ role: 'bot', type: 'text', content: 'Have you had a recent stroke or heart attack in the past 6 months?\n• Yes / No' })
+        setPreProcStep('q_stroke')
       }
       return
     }
 
-    if (preProcStep === 'q_admission') {
+    if (preProcStep === 'q_stroke') {
       if (!lower.startsWith('y') && !lower.startsWith('n')) {
-        addMsg({ role: 'bot', type: 'text', content: 'Sorry, I didn\'t understand that. Please answer Yes or No.\n\nDo you have any hospital admission in the last 3 months?\n• Yes / No' })
-        return
-      }
-      const val = lower.startsWith('y')
-      setFormAnswers(prev => ({ ...prev, last3mths_admission: val }))
-      addMsg({ role: 'bot', type: 'text', content: 'Any recent heart attack / stroke in last 6 months?\n• Yes / No' })
-      setPreProcStep('q_stroke')
-    } else if (preProcStep === 'q_stroke') {
-      if (!lower.startsWith('y') && !lower.startsWith('n')) {
-        addMsg({ role: 'bot', type: 'text', content: 'Sorry, I didn\'t understand that. Please answer Yes or No.\n\nAny recent heart attack / stroke in last 6 months?\n• Yes / No' })
+        addMsg({ role: 'bot', type: 'text', content: 'Sorry, I didn\'t understand that. Please answer Yes or No.\n\nHave you had a recent stroke or heart attack in the past 6 months?\n• Yes / No' })
         return
       }
       const val = lower.startsWith('y')
       setFormAnswers(prev => ({ ...prev, stroke_heartAtt_last6mths: val }))
+      addMsg({ role: 'bot', type: 'text', content: 'Have you been hospitalised in the past 3 months?\n• Yes / No' })
+      setPreProcStep('q_admission')
+    } else if (preProcStep === 'q_admission') {
+      if (!lower.startsWith('y') && !lower.startsWith('n')) {
+        addMsg({ role: 'bot', type: 'text', content: 'Sorry, I didn\'t understand that. Please answer Yes or No.\n\nHave you been hospitalised in the past 3 months?\n• Yes / No' })
+        return
+      }
+      const val = lower.startsWith('y')
+      setFormAnswers(prev => ({ ...prev, last3mths_admission: val }))
+      addMsg({ role: 'bot', type: 'text', content: 'Are you on antibiotics?\n• Yes / No' })
+      setPreProcStep('q_antibiotics')
+    } else if (preProcStep === 'q_antibiotics') {
+      if (!lower.startsWith('y') && !lower.startsWith('n')) {
+        addMsg({ role: 'bot', type: 'text', content: 'Sorry, I didn\'t understand that. Please answer Yes or No.\n\nAre you on antibiotics?\n• Yes / No' })
+        return
+      }
+      const val = lower.startsWith('y')
+      setFormAnswers(prev => ({ ...prev, taking_antibiotics: val }))
+      addMsg({ role: 'bot', type: 'text', content: 'Are you pregnant? (if applicable)\n• Yes / No' })
+      setPreProcStep('q_pregnant')
+    } else if (preProcStep === 'q_pregnant') {
+      if (!lower.startsWith('y') && !lower.startsWith('n')) {
+        addMsg({ role: 'bot', type: 'text', content: 'Sorry, I didn\'t understand that. Please answer Yes or No.\n\nAre you pregnant? (if applicable)\n• Yes / No' })
+        return
+      }
+      const val = lower.startsWith('y')
+      // All four acknowledgement questions are now answered — show the completed form
+      // before confirming the treatment eye.
+      const answered = { ...formAnswers, pregnant: val }
+      setFormAnswers(answered)
+      addMsg({ role: 'bot', type: 'text', content: 'Thank you. Here is your Pre-Procedure Acknowledgement Form.' })
+      addMsg({
+        role: 'bot',
+        type: 'acknowledgement_doc',
+        content: '',
+        formData: buildAckFormData({
+          patientName: epicRecord?.record_name || '',
+          nric: currentPatientId || epicRecord?.patient_id || '',
+          strokeHeartAtt: answered.stroke_heartAtt_last6mths,
+          hospitalised: answered.last3mths_admission,
+          antibiotics: answered.taking_antibiotics,
+          pregnant: answered.pregnant,
+        }),
+      })
       addMsg({ role: 'bot', type: 'text', content: 'May I confirm your IVT treatment is for right eye, left eye or both?' })
       setPreProcStep('q_eye')
     } else if (preProcStep === 'q_eye') {
@@ -371,8 +451,20 @@ export default function ChatWindow({ onBack }) {
         return
       }
       if (lower.startsWith('n')) {
+        // Declining the cost ends the flow, but the acknowledgement answers are still saved
+        // so the four pre-procedure questions aren't lost.
+        // The acknowledgement form was already shown after the four questions; declining
+        // the cost just ends the flow. The answers are still persisted so they aren't lost.
         setPreProcStep('complete')
-        addMsg({ role: 'bot', type: 'text', content: "Understood. You may return to the menu when you're ready." })
+        setLoading(true)
+        addMsg({ role: 'bot', type: 'text', content: "Understood. I've saved your acknowledgement — you may return to the menu when you're ready." })
+        try {
+          await submitAcknowledgement(buildPayload(formAnswers, epicRecord))
+        } catch {
+          /* Save failed — the acknowledgement was already displayed from the local answers. */
+        } finally {
+          setLoading(false)
+        }
         return
       }
       setPreProcStep('payment_mode')
@@ -510,7 +602,7 @@ export default function ChatWindow({ onBack }) {
     }
   }
 
-  const showYesNo = mode === 'pre_procedure' && (preProcStep === 'ask_update' || preProcStep === 'q_admission' || preProcStep === 'q_stroke' || preProcStep === 'cost_confirm')
+  const showYesNo = mode === 'pre_procedure' && (preProcStep === 'ask_update' || preProcStep === 'q_stroke' || preProcStep === 'q_admission' || preProcStep === 'q_antibiotics' || preProcStep === 'q_pregnant' || preProcStep === 'cost_confirm')
   const showEye = mode === 'pre_procedure' && preProcStep === 'q_eye'
   const showPaymentMode = mode === 'pre_procedure' && preProcStep === 'payment_mode'
   const showReturnMenu = mode === 'general_enquiry' || (mode === 'pre_procedure' && preProcStep === 'complete') || (mode === 'post_operation' && postOpStep === 'complete')

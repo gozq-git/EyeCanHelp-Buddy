@@ -1,0 +1,12 @@
+# Coverage configuration for the backend test suite.
+#
+# `concurrency = thread,greenlet` is required for accurate coverage of the async
+# SQLAlchemy routes (e.g. routers/patient.py). Starlette's TestClient runs the app
+# in a worker thread, and SQLAlchemy's async engine bridges async<->sync via
+# greenlets (greenlet_spawn). Without tracking both, coverage stops recording after
+# the first `await db.execute(...)` in each route, so every statement afterwards is
+# wrongly reported as missing even though the tests execute it.
+[run]
+concurrency =
+    thread
+    greenlet
