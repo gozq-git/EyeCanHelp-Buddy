@@ -37,7 +37,7 @@ export default defineConfig({
   ],
   // Start the Vite dev server automatically for the duration of the run.
   webServer: SKIP_WEBSERVER ? undefined : {
-    command: 'npm run dev -- --port 3000',
+    command: 'npm run dev -- --host 127.0.0.1 --port 3000',
     cwd: FRONTEND_DIR,
     url: BASE_URL,
     reuseExistingServer: !process.env.CI,
