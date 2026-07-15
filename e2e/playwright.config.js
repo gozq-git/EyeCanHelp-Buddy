@@ -15,7 +15,7 @@ const FRONTEND_DIR = path.resolve(__dirname, '../frontend')
 // When running inside the Playwright Docker image we point at a Vite server that
 // is already running (on the host / another container), so skip the managed
 // webServer. Locally, Playwright starts Vite itself.
-const BASE_URL = process.env.E2E_BASE_URL || 'http://localhost:3000'
+const BASE_URL = process.env.E2E_BASE_URL || 'http://127.0.0.1:3000'
 const SKIP_WEBSERVER = !!process.env.E2E_SKIP_WEBSERVER
 
 export default defineConfig({

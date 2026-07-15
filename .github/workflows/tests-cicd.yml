@@ -78,6 +78,7 @@ jobs:
           npx playwright install --with-deps chromium
       - name: Run Playwright (starts Vite via webServer)
         working-directory: e2e
+        timeout-minutes: 5 # Force fails the step if it hangs
         run: npx playwright test
       - uses: actions/upload-artifact@v4
         if: always()
