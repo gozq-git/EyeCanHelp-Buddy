@@ -12,6 +12,7 @@ const QUESTIONS = [
 
 const INK = '#1a1a1a'
 const BORDER = '1px solid #222'
+const TTSH_LOGO_SRC = '/ttsh_logo.png'
 
 // One option, underlined when it is the patient's answer.
 function Option({ label, active }) {
@@ -73,16 +74,12 @@ export default function AcknowledgementDoc({ formData = {} }) {
     }}>
       {/* ── Letterhead + patient sticker ─────────────────────────── */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px' }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '6px' }}>
-          <span aria-hidden style={{ fontSize: '16px', lineHeight: 1, marginTop: '2px' }}>
-            <span style={{ color: '#c0202f' }}>●</span>
-            <span style={{ color: '#1c3f94' }}>✦</span>
-          </span>
-          <div>
-            <div style={{ color: '#1c3f94', fontWeight: 700, fontSize: '15px', lineHeight: '1.1' }}>Tan Tock Seng</div>
-            <div style={{ color: '#1c3f94', fontWeight: 700, fontSize: '15px', lineHeight: '1.1' }}>Hospital</div>
-            <div style={{ color: '#3a9d3a', fontWeight: 700, fontStyle: 'italic', fontSize: '10px', marginTop: '2px' }}>NHG Health</div>
-          </div>
+        <div style={{ width: '260px', aspectRatio: '360 / 82', overflow: 'hidden' }}>
+          <img
+            src={TTSH_LOGO_SRC}
+            alt="ttsh_logo"
+            style={{ width: '190%', display: 'block', marginLeft: '-1.2%', marginTop: '-5.2%' }}
+          />
         </div>
 
         <div style={{ position: 'relative', width: '190px', minHeight: '86px', border: BORDER, padding: '5px 8px', fontSize: '10px' }}>

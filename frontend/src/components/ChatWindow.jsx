@@ -12,6 +12,9 @@ const INIT_MESSAGES = [{ id: 1, role: 'bot', type: 'welcome', content: '' }]
 // Total cost shown to the patient before payment-mode selection. Mirrors the default
 // in FinancialCounsellingDoc and the payment.payment_estCostPerInjection used by buildPayload.
 const PROCEDURE_COST = 123
+const PREPROC_LABELS = ['Fill up IVT Pre-Procedure Acknowledgemnt Form', 'Fill up pre-procedure']
+const POSTOP_LABELS = ['View Post-IVT Advice Form', 'Fill up post-operation checklist']
+const APPOINTMENT_LABELS = ['Book Appointment', 'Appointment']
 
 function buildPayload(answers, epicRecord) {
   const patientId = epicRecord?.patient_id || 'UNKNOWN'
@@ -127,18 +130,18 @@ export default function ChatWindow({ onBack }) {
         type: 'text',
         content: "Sure, I can help answer general enquiries about eye procedures or surgery.\n\n**Disclaimer:**\nThis chatbot provides general information only and cannot replace your doctor's clinical advice, diagnosis, or treatment plan.\nIt is not intended to replace standard medical care.\nIf you have urgent or worsening symptoms, please seek immediate medical attention.",
       })
-    } else if (label === 'Fill up pre-procedure') {
+    } else if (PREPROC_LABELS.includes(label)) {
       setMode('pre_procedure')
       setPreProcStep('login')
       setFormAnswers(INIT_FORM)
       addMsg({ role: 'bot', type: 'text', content: 'To proceed with the form, would you please sign in below?' })
       addMsg({ role: 'bot', type: 'singpass', content: '' })
-    } else if (label === 'Fill up post-operation checklist') {
+    } else if (POSTOP_LABELS.includes(label)) {
       setMode('post_operation')
       setPostOpStep('login')
       addMsg({ role: 'bot', type: 'text', content: 'To proceed with the checklist, would you please sign in below?' })
       addMsg({ role: 'bot', type: 'singpass', content: '' })
-    } else if (label === 'Appointment') {
+    } else if (APPOINTMENT_LABELS.includes(label)) {
       // Placeholder — the real appointment-booking flow will be wired in later.
       addMsg({ role: 'bot', type: 'text', content: 'Appointment booking is coming soon. In the meantime, please contact the clinic to schedule your appointment.' })
     } else if (label === 'Return Menu') {

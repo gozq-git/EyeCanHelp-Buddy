@@ -84,9 +84,9 @@ describe('ChatWindow — welcome state', () => {
   it('renders the quick-reply option pills on load (incl. Appointment, no Return Menu)', () => {
     render(<ChatWindow />)
     expect(screen.getByRole('button', { name: 'General Enquiry' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Fill up pre-procedure' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Fill up post-operation checklist' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Appointment' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Fill up IVT Pre-Procedure Acknowledgemnt Form' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'View Post-IVT Advice Form' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Book Appointment' })).toBeInTheDocument()
     // Return Menu is redundant on the first welcome bubble — you're already at the menu.
     expect(screen.queryByRole('button', { name: 'Return Menu' })).not.toBeInTheDocument()
   })
@@ -191,21 +191,21 @@ describe('ChatWindow — Pre-Procedure flow', () => {
     getLatestAcknowledgement.mockRejectedValue(new Error('no record'))
   })
 
-  it('clicking Fill up pre-procedure shows the Singpass login button', async () => {
+  it('clicking Fill up IVT Pre-Procedure Acknowledgemnt Form shows the Singpass login button', async () => {
     render(<ChatWindow />)
-    await userEvent.click(screen.getByRole('button', { name: 'Fill up pre-procedure' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Fill up IVT Pre-Procedure Acknowledgemnt Form' }))
     expect(screen.getByRole('button', { name: /singpass login/i })).toBeInTheDocument()
   })
 
   it('input is disabled while waiting for Singpass login', async () => {
     render(<ChatWindow />)
-    await userEvent.click(screen.getByRole('button', { name: 'Fill up pre-procedure' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Fill up IVT Pre-Procedure Acknowledgemnt Form' }))
     expect(screen.getByRole('textbox')).toBeDisabled()
   })
 
   it('Yes/No chips appear after Singpass login completes', async () => {
     render(<ChatWindow />)
-    await userEvent.click(screen.getByRole('button', { name: 'Fill up pre-procedure' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Fill up IVT Pre-Procedure Acknowledgemnt Form' }))
     await userEvent.click(screen.getByRole('button', { name: /singpass login/i }))
     expect(screen.getByRole('button', { name: 'Yes' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'No' })).toBeInTheDocument()
@@ -213,7 +213,7 @@ describe('ChatWindow — Pre-Procedure flow', () => {
 
   it('Yes/No chips also appear for the next question after the first is answered', async () => {
     render(<ChatWindow />)
-    await userEvent.click(screen.getByRole('button', { name: 'Fill up pre-procedure' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Fill up IVT Pre-Procedure Acknowledgemnt Form' }))
     await userEvent.click(screen.getByRole('button', { name: /singpass login/i }))
     // Existing patient → ask_update; click Yes to advance into the question flow.
     await userEvent.click(screen.getByRole('button', { name: 'Yes' }))
@@ -224,7 +224,7 @@ describe('ChatWindow — Pre-Procedure flow', () => {
 
   it('Right/Left/Both eye chips appear after all four Yes/No questions are answered', async () => {
     render(<ChatWindow />)
-    await userEvent.click(screen.getByRole('button', { name: 'Fill up pre-procedure' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Fill up IVT Pre-Procedure Acknowledgemnt Form' }))
     await userEvent.click(screen.getByRole('button', { name: /singpass login/i }))
     await userEvent.click(screen.getByRole('button', { name: 'Yes' })) // ask_update
     await userEvent.click(screen.getByRole('button', { name: 'No' }))  // q_stroke
@@ -238,7 +238,7 @@ describe('ChatWindow — Pre-Procedure flow', () => {
 
   it('maps the four acknowledgement-form answers onto the patient record', async () => {
     render(<ChatWindow />)
-    await userEvent.click(screen.getByRole('button', { name: 'Fill up pre-procedure' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Fill up IVT Pre-Procedure Acknowledgemnt Form' }))
     await userEvent.click(screen.getByRole('button', { name: /singpass login/i }))
     await userEvent.click(screen.getByRole('button', { name: 'Yes' }))   // ask_update
     await userEvent.click(screen.getByRole('button', { name: 'No' }))    // q_stroke = false
@@ -258,7 +258,7 @@ describe('ChatWindow — Pre-Procedure flow', () => {
 
   it('record_eyes is OD when user selects Right', async () => {
     render(<ChatWindow />)
-    await userEvent.click(screen.getByRole('button', { name: 'Fill up pre-procedure' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Fill up IVT Pre-Procedure Acknowledgemnt Form' }))
     await userEvent.click(screen.getByRole('button', { name: /singpass login/i }))
     await userEvent.click(screen.getByRole('button', { name: 'Yes' }))   // ask_update
     await userEvent.click(screen.getByRole('button', { name: 'No' }))    // q_stroke
@@ -275,7 +275,7 @@ describe('ChatWindow — Pre-Procedure flow', () => {
 
   it('record_eyes is OS when user selects Left', async () => {
     render(<ChatWindow />)
-    await userEvent.click(screen.getByRole('button', { name: 'Fill up pre-procedure' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Fill up IVT Pre-Procedure Acknowledgemnt Form' }))
     await userEvent.click(screen.getByRole('button', { name: /singpass login/i }))
     await userEvent.click(screen.getByRole('button', { name: 'Yes' }))   // ask_update
     await userEvent.click(screen.getByRole('button', { name: 'No' }))    // q_stroke
@@ -292,7 +292,7 @@ describe('ChatWindow — Pre-Procedure flow', () => {
 
   it('record_eyes is OU when user selects Both', async () => {
     render(<ChatWindow />)
-    await userEvent.click(screen.getByRole('button', { name: 'Fill up pre-procedure' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Fill up IVT Pre-Procedure Acknowledgemnt Form' }))
     await userEvent.click(screen.getByRole('button', { name: /singpass login/i }))
     await userEvent.click(screen.getByRole('button', { name: 'Yes' }))   // ask_update
     await userEvent.click(screen.getByRole('button', { name: 'No' }))    // q_stroke
@@ -309,7 +309,7 @@ describe('ChatWindow — Pre-Procedure flow', () => {
 
   it('renders the acknowledgement doc with the four questions after submission', async () => {
     render(<ChatWindow />)
-    await userEvent.click(screen.getByRole('button', { name: 'Fill up pre-procedure' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Fill up IVT Pre-Procedure Acknowledgemnt Form' }))
     await userEvent.click(screen.getByRole('button', { name: /singpass login/i }))
     await userEvent.click(screen.getByRole('button', { name: 'Yes' }))   // ask_update
     await userEvent.click(screen.getByRole('button', { name: 'No' }))    // q_stroke
@@ -329,7 +329,7 @@ describe('ChatWindow — Pre-Procedure flow', () => {
 
   it('shows the acknowledgement form after the 4 questions and before the eye question', async () => {
     render(<ChatWindow />)
-    await userEvent.click(screen.getByRole('button', { name: 'Fill up pre-procedure' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Fill up IVT Pre-Procedure Acknowledgemnt Form' }))
     await userEvent.click(screen.getByRole('button', { name: /singpass login/i }))
     await userEvent.click(screen.getByRole('button', { name: 'Yes' }))   // ask_update
     await userEvent.click(screen.getByRole('button', { name: 'No' }))    // q_stroke
@@ -345,7 +345,7 @@ describe('ChatWindow — Pre-Procedure flow', () => {
 
   it('saves the acknowledgement and shows the doc even when the cost is declined', async () => {
     render(<ChatWindow />)
-    await userEvent.click(screen.getByRole('button', { name: 'Fill up pre-procedure' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Fill up IVT Pre-Procedure Acknowledgemnt Form' }))
     await userEvent.click(screen.getByRole('button', { name: /singpass login/i }))
     await userEvent.click(screen.getByRole('button', { name: 'Yes' }))   // ask_update
     await userEvent.click(screen.getByRole('button', { name: 'No' }))    // q_stroke
@@ -365,7 +365,7 @@ describe('ChatWindow — Pre-Procedure flow', () => {
 
   it('renders FinancialCounsellingDoc after submitAcknowledgement resolves', async () => {
     render(<ChatWindow />)
-    await userEvent.click(screen.getByRole('button', { name: 'Fill up pre-procedure' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Fill up IVT Pre-Procedure Acknowledgemnt Form' }))
     await userEvent.click(screen.getByRole('button', { name: /singpass login/i }))
     await userEvent.click(screen.getByRole('button', { name: 'Yes' }))   // ask_update
     await userEvent.click(screen.getByRole('button', { name: 'No' }))    // q_stroke
@@ -383,7 +383,7 @@ describe('ChatWindow — Pre-Procedure flow', () => {
   it('renders FinancialCounsellingDoc even when submitAcknowledgement rejects (fallback)', async () => {
     submitAcknowledgement.mockRejectedValueOnce(new Error('Backend down'))
     render(<ChatWindow />)
-    await userEvent.click(screen.getByRole('button', { name: 'Fill up pre-procedure' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Fill up IVT Pre-Procedure Acknowledgemnt Form' }))
     await userEvent.click(screen.getByRole('button', { name: /singpass login/i }))
     await userEvent.click(screen.getByRole('button', { name: 'Yes' }))   // ask_update
     await userEvent.click(screen.getByRole('button', { name: 'No' }))    // q_stroke
@@ -400,7 +400,7 @@ describe('ChatWindow — Pre-Procedure flow', () => {
 
   it('input is disabled after the pre-procedure flow is complete', async () => {
     render(<ChatWindow />)
-    await userEvent.click(screen.getByRole('button', { name: 'Fill up pre-procedure' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Fill up IVT Pre-Procedure Acknowledgemnt Form' }))
     await userEvent.click(screen.getByRole('button', { name: /singpass login/i }))
     await userEvent.click(screen.getByRole('button', { name: 'Yes' }))   // ask_update
     await userEvent.click(screen.getByRole('button', { name: 'No' }))    // q_stroke
@@ -431,7 +431,7 @@ describe('ChatWindow — Pre-Procedure input validation', () => {
 
   async function reachStep(step) {
     render(<ChatWindow />)
-    await userEvent.click(screen.getByRole('button', { name: 'Fill up pre-procedure' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Fill up IVT Pre-Procedure Acknowledgemnt Form' }))
     await userEvent.click(screen.getByRole('button', { name: /singpass login/i }))
     // Existing patient → ask_update; click Yes to enter the question flow (starts at q_stroke).
     await userEvent.click(screen.getByRole('button', { name: 'Yes' }))
@@ -526,33 +526,33 @@ describe('ChatWindow — Post-Operation Checklist flow', () => {
     getLatestAcknowledgement.mockRejectedValue(new Error('no record'))
   })
 
-  it('shows the Singpass login button when Fill up post-operation checklist is clicked', async () => {
+  it('shows the Singpass login button when View Post-IVT Advice Form is clicked', async () => {
     render(<ChatWindow />)
-    await userEvent.click(screen.getByRole('button', { name: 'Fill up post-operation checklist' }))
+    await userEvent.click(screen.getByRole('button', { name: 'View Post-IVT Advice Form' }))
     expect(screen.getByRole('button', { name: /singpass login/i })).toBeInTheDocument()
   })
 
   it('shows the login prompt message before Singpass login', async () => {
     render(<ChatWindow />)
-    await userEvent.click(screen.getByRole('button', { name: 'Fill up post-operation checklist' }))
+    await userEvent.click(screen.getByRole('button', { name: 'View Post-IVT Advice Form' }))
     expect(screen.getByText(/To proceed with the checklist/i)).toBeInTheDocument()
   })
 
   it('input is disabled while waiting for Singpass login', async () => {
     render(<ChatWindow />)
-    await userEvent.click(screen.getByRole('button', { name: 'Fill up post-operation checklist' }))
+    await userEvent.click(screen.getByRole('button', { name: 'View Post-IVT Advice Form' }))
     expect(screen.getByRole('textbox')).toBeDisabled()
   })
 
   it('does not show the checklist before login', async () => {
     render(<ChatWindow />)
-    await userEvent.click(screen.getByRole('button', { name: 'Fill up post-operation checklist' }))
+    await userEvent.click(screen.getByRole('button', { name: 'View Post-IVT Advice Form' }))
     expect(screen.queryByText(/Post Intravitreal Injection/i)).not.toBeInTheDocument()
   })
 
   it('renders PostOpChecklistDoc after Singpass login', async () => {
     render(<ChatWindow />)
-    await userEvent.click(screen.getByRole('button', { name: 'Fill up post-operation checklist' }))
+    await userEvent.click(screen.getByRole('button', { name: 'View Post-IVT Advice Form' }))
     await userEvent.click(screen.getByRole('button', { name: /singpass login/i }))
     expect(screen.getByText(/Post Intravitreal Injection/i)).toBeInTheDocument()
   })
@@ -560,21 +560,21 @@ describe('ChatWindow — Post-Operation Checklist flow', () => {
   it('shows a welcome-back message after login', async () => {
     // For an existing patient the post-op flow greets "Welcome back, {name}. Here is your post-operation checklist."
     render(<ChatWindow />)
-    await userEvent.click(screen.getByRole('button', { name: 'Fill up post-operation checklist' }))
+    await userEvent.click(screen.getByRole('button', { name: 'View Post-IVT Advice Form' }))
     await userEvent.click(screen.getByRole('button', { name: /singpass login/i }))
     expect(screen.getByText(/Welcome back, Tan Ah Kow/i)).toBeInTheDocument()
   })
 
   it('input is disabled after the checklist is shown', async () => {
     render(<ChatWindow />)
-    await userEvent.click(screen.getByRole('button', { name: 'Fill up post-operation checklist' }))
+    await userEvent.click(screen.getByRole('button', { name: 'View Post-IVT Advice Form' }))
     await userEvent.click(screen.getByRole('button', { name: /singpass login/i }))
     expect(screen.getByRole('textbox')).toBeDisabled()
   })
 
   it('does not call any backend API for the post-op checklist', async () => {
     render(<ChatWindow />)
-    await userEvent.click(screen.getByRole('button', { name: 'Fill up post-operation checklist' }))
+    await userEvent.click(screen.getByRole('button', { name: 'View Post-IVT Advice Form' }))
     await userEvent.click(screen.getByRole('button', { name: /singpass login/i }))
     expect(submitAcknowledgement).not.toHaveBeenCalled()
     expect(sendChatMessage).not.toHaveBeenCalled()
@@ -600,7 +600,7 @@ describe('ChatWindow — Return Menu', () => {
   it('clicking Appointment from the main menu posts a placeholder message', async () => {
     render(<ChatWindow />)
     // Appointment lives only in the main welcome menu, not the completion bar.
-    await userEvent.click(screen.getByRole('button', { name: 'Appointment' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Book Appointment' }))
     expect(screen.getByText(/Appointment booking is coming soon/i)).toBeInTheDocument()
   })
 
@@ -610,6 +610,7 @@ describe('ChatWindow — Return Menu', () => {
     // The completion bar shows Return Menu; the only Appointment button is the
     // historical one still in the welcome bubble, so there is exactly one.
     expect(screen.getByRole('button', { name: 'Return Menu' })).toBeInTheDocument()
-    expect(screen.getAllByRole('button', { name: 'Appointment' })).toHaveLength(1)
+    expect(screen.getAllByRole('button', { name: 'Book Appointment' })).toHaveLength(1)
   })
 })
+

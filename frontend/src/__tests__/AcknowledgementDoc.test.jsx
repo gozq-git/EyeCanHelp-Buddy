@@ -60,7 +60,7 @@ describe('AcknowledgementDoc', () => {
 
   it('renders the TTS letterhead and signature grid labels', () => {
     render(<AcknowledgementDoc />)
-    expect(screen.getByText('Tan Tock Seng')).toBeInTheDocument()
+    expect(screen.getByAltText('ttsh_logo')).toBeInTheDocument()
     expect(screen.getByText(/Patient.s sticker/)).toBeInTheDocument()
     expect(screen.getByText('Signature of Attending Nurse')).toBeInTheDocument()
     expect(screen.getByText('MEC-MEY-388-01')).toBeInTheDocument()
