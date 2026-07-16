@@ -74,11 +74,11 @@ export default function AcknowledgementDoc({ formData = {} }) {
     }}>
       {/* ── Letterhead + patient sticker ─────────────────────────── */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px' }}>
-        <div style={{ width: '260px', aspectRatio: '360 / 82', overflow: 'hidden' }}>
+        <div style={{ width: '190px' }}>
           <img
             src={TTSH_LOGO_SRC}
             alt="ttsh_logo"
-            style={{ width: '190%', display: 'block', marginLeft: '-1.2%', marginTop: '-5.2%' }}
+            style={{ width: '100%', height: 'auto', display: 'block' }}
           />
         </div>
 
