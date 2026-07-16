@@ -9,9 +9,9 @@ import AcknowledgementDoc from './AcknowledgementDoc'
 
 const QUICK_REPLY_OPTIONS = [
   'General Enquiry',
-  'Fill up pre-procedure',
-  'Fill up post-operation checklist',
-  'Appointment',
+  'Fill up IVT Pre-Procedure Acknowledgemnt Form',
+  'View Post-IVT Advice Form',
+  'Book Appointment',
 ]
 
 // 'Return Menu' is redundant on the first welcome bubble (you're already at the

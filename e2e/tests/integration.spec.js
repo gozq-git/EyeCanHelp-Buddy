@@ -53,7 +53,7 @@ test.describe('Real backend integration @integration', () => {
   test('existing patient (P001) logs in via Singpass and is recognised', async ({ page }) => {
     await gotoChat(page)
 
-    await page.getByRole('button', { name: 'Fill up post-operation checklist' }).click()
+    await page.getByRole('button', { name: 'View Post-IVT Advice Form' }).click()
     await expect(page.getByText(/To proceed with the checklist/i)).toBeVisible()
 
     await singpassLogin(page, PATIENT_P001.patient_id)

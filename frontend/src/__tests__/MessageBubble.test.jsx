@@ -7,9 +7,9 @@ describe('MessageBubble — welcome type', () => {
   it('renders the quick-reply option buttons by default, without Return Menu', () => {
     render(<MessageBubble role="bot" type="welcome" content="" onQuickReply={() => {}} />)
     expect(screen.getByRole('button', { name: 'General Enquiry' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Fill up pre-procedure' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Fill up post-operation checklist' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Appointment' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Fill up IVT Pre-Procedure Acknowledgemnt Form' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'View Post-IVT Advice Form' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Book Appointment' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Return Menu' })).not.toBeInTheDocument()
   })
 
@@ -28,7 +28,7 @@ describe('MessageBubble — welcome type', () => {
   it('passes the correct label for each quick-reply option', async () => {
     const onQuickReply = vi.fn()
     render(<MessageBubble role="bot" type="welcome" content="" includeReturnMenu onQuickReply={onQuickReply} />)
-    for (const label of ['Fill up pre-procedure', 'Fill up post-operation checklist', 'Return Menu']) {
+    for (const label of ['Fill up IVT Pre-Procedure Acknowledgemnt Form', 'View Post-IVT Advice Form', 'Return Menu']) {
       await userEvent.click(screen.getByRole('button', { name: label }))
       expect(onQuickReply).toHaveBeenCalledWith(label)
     }
@@ -114,3 +114,4 @@ describe('MessageBubble — postop_doc type', () => {
     expect(screen.getByText(/Post Intravitreal Injection/i)).toBeInTheDocument()
   })
 })
+

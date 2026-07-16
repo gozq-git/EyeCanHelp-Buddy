@@ -6,7 +6,7 @@ test.describe('Post-operation checklist flow', () => {
     await mockBackend(page)
     await gotoChat(page)
 
-    await page.getByRole('button', { name: 'Fill up post-operation checklist' }).click()
+    await page.getByRole('button', { name: 'View Post-IVT Advice Form' }).click()
     await expect(page.getByText(/To proceed with the checklist/i)).toBeVisible()
 
     await singpassLogin(page, 'P001')
