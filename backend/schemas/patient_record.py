@@ -15,6 +15,8 @@ class PatientRecordCreate(BaseModel):
     record_stroke_heartAtt_last6mths: bool
     record_taking_antibiotics: bool
     record_pregnant: bool
+    record_class: str | None = None
+    record_performer: str | None = None
 
 
 class PatientRecordResponse(PatientRecordCreate):

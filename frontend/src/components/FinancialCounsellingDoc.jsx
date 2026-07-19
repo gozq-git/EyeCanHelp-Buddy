@@ -45,6 +45,7 @@ export default function FinancialCounsellingDoc({ formData = {} }) {
     diagnosis = 'H35.31',
     estCost = 123,
     injections = 1,
+    maxMedisaveClaimable = 250,
     paymentMode = 'Medisave',
   } = formData
 
@@ -59,8 +60,19 @@ export default function FinancialCounsellingDoc({ formData = {} }) {
   // Must mirror PostOpChecklistDoc exactly so the two forms tally.
   // Use || (not destructuring default) so an empty-string medication still falls through.
   const medication = formData.medication || 'Faricimab (Vabysmo)'
+  const classCode = (formData.classCode || '').toUpperCase()
+  const performer = (formData.performer || 'Nurse').toLowerCase()
+  const isNurseLed = performer.includes('nurse')
+  const isDoctorLed = performer.includes('doctor')
   const MED_OPTIONS = ['Lucentis', 'Faricimab', 'Eylea', 'Others']
   const activeMed = MED_OPTIONS.find(m => medication.toLowerCase().includes(m.toLowerCase())) || 'Others'
+  const rawCost = String(estCost ?? '').trim()
+  const rangeText = rawCost.includes('-')
+    ? (() => {
+        const [minPart, maxPart] = rawCost.split('-').map(v => v.trim().replace(/^\$/, ''))
+        return `$${minPart} - $${maxPart}`
+      })()
+    : (rawCost ? (rawCost.startsWith('$') ? rawCost : `$${rawCost}`) : '$123')
 
   return (
     <div style={{
@@ -97,7 +109,7 @@ export default function FinancialCounsellingDoc({ formData = {} }) {
 
       <FlexRow>
         <strong>Class:</strong>
-        {['PTE', 'PTEP', 'PTRF', 'NR', 'Other'].map(c => <CB key={c} checked={false} label={c} />)}
+        {['PTE', 'SUB'].map(c => <CB key={c} checked={classCode === c} label={c} />)}
       </FlexRow>
 
       <Line />
@@ -111,13 +123,12 @@ export default function FinancialCounsellingDoc({ formData = {} }) {
 
       <Line />
 
-      <div style={{ fontWeight: 700, marginBottom: '4px' }}>Procedure: * Intravitreal Inj (Unilateral)</div>
+      <div style={{ fontWeight: 700, marginBottom: '4px' }}>Procedure: * Intravitreal Inj</div>
       <div style={{ marginBottom: '2px' }}>
-        <CB checked={true} label="1B SL700V1A — Nurse-Led" />
-        <span style={{ color: '#1565C0', fontSize: '9px', marginLeft: '4px' }}>(Code: 2245-07)</span>
+        <CB checked={isNurseLed || !isDoctorLed} label="1B SL700V1A — Nurse-Led Intravitreal Inj" />
       </div>
       <div style={{ marginBottom: '6px' }}>
-        <CB checked={false} label="1B SL700XX — Intravitreal Inj" />
+        <CB checked={isDoctorLed} label="1B SL700VX — Intravitreal Inj" />
       </div>
 
       <div style={{ fontWeight: 700, marginBottom: '3px' }}>Drug:</div>
@@ -127,15 +138,18 @@ export default function FinancialCounsellingDoc({ formData = {} }) {
 
       <div style={{ background: '#fff8f8', border: '1px solid #fdd', borderRadius: '4px', padding: '6px', marginBottom: '8px' }}>
         <strong>Est. Hospital Bill: </strong>
-        <span style={{ color: '#D32F2F', fontWeight: 700, fontSize: '14px' }}>${estCost}</span>
+        <span style={{ color: '#D32F2F', fontWeight: 700, fontSize: '14px' }}>{rangeText}</span>
         {' '}for {injections} injection(s)
+        <div style={{ fontSize: '9px', color: '#444', marginTop: '3px' }}>
+          Max Medisave Claimable: <strong>${maxMedisaveClaimable}</strong>
+        </div>
         <div style={{ fontSize: '9px', color: '#777', marginTop: '3px' }}>
           Note: 1. Price subject to GST. 2. Consult fee, diagnostics &amp; non-std drugs NOT included. 3. Charges may change.
         </div>
       </div>
 
       <div style={{ fontSize: '9px', marginBottom: '8px' }}>
-        I have been given financial counselling on the estimated bill of ${estCost} for {injections} injection(s) and fully understand. Actual cost may differ from estimate.
+        I have been given financial counselling on the estimated bill of {rangeText} for {injections} injection(s) and fully understand. Actual cost may differ from estimate.
       </div>
 
       <Line />
@@ -149,12 +163,13 @@ export default function FinancialCounsellingDoc({ formData = {} }) {
 
       <FlexRow>
         <strong>Payment:</strong>
-        {['Medisave', 'Life', 'IP', 'CSC', 'Cash'].map(p => {
-          // 'NOK Medisave' is operationally a Medisave payment (just paid out of the
-          // next-of-kin's account), so it should tick the same checkbox as 'Medisave'.
-          const checked = p === 'Medisave'
-            ? paymentMode.toLowerCase().includes('medisave')
-            : p === paymentMode
+        {['Medishield Life / Integrated Plan', 'CSC', 'Medisave (Self)', 'MAF', 'Cash', 'NOK Medisave'].map(p => {
+          const mode = paymentMode.toLowerCase()
+          const checked = p === 'Medishield Life / Integrated Plan'
+            ? mode.includes('medishield') || mode.includes('integrated') || paymentMode === 'MediShield'
+            : p === 'Medisave (Self)'
+              ? (mode.includes('medisave') && !mode.includes('nok')) || paymentMode === 'Medisave'
+              : p.toLowerCase() === mode
           return <CB key={p} checked={checked} label={p} />
         })}
       </FlexRow>

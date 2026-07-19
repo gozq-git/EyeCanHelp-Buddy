@@ -134,3 +134,10 @@ export const createPatient = (data) =>
 
 export const getLatestAcknowledgement = (patientId) =>
   api.get(`/acknowledgement/latest/${patientId}`)
+
+export const calculateBill = ({ recordClass, performer, injections }) =>
+  api.post('/billing/calculate', {
+    record_class: recordClass,
+    performer,
+    injections,
+  })

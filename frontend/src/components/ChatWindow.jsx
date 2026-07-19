@@ -1,20 +1,48 @@
 import React, { useState, useRef, useEffect } from 'react'
 import MessageBubble from './MessageBubble'
 import EyeLogoSVG from './EyeLogoSVG'
-import { sendChatMessage, sendChatMessageStream, submitAcknowledgement, getEpicRecord, getPatient, createPatient, getLatestAcknowledgement } from '../api/client'
+import { sendChatMessage, sendChatMessageStream, submitAcknowledgement, getEpicRecord, getPatient, createPatient, getLatestAcknowledgement, calculateBill } from '../api/client'
 
 let _msgId = 1
 const nextId = () => ++_msgId
 
-const INIT_FORM = { last3mths_admission: false, stroke_heartAtt_last6mths: false, taking_antibiotics: false, pregnant: false, record_eyes: 'OD', payment_mode: 'Medisave' }
+const INIT_FORM = { last3mths_admission: false, stroke_heartAtt_last6mths: false, taking_antibiotics: false, pregnant: false, record_eyes: 'OD', record_number_of_injections: 1, record_class: '', record_performer: 'Nurse', estimated_cost: 123, estimated_cost_min: 123, estimated_cost_max: 123, estimated_cost_range: '123 - 123', payment_mode: 'Medisave (Self)' }
 const INIT_MESSAGES = [{ id: 1, role: 'bot', type: 'welcome', content: '' }]
 
 // Total cost shown to the patient before payment-mode selection. Mirrors the default
 // in FinancialCounsellingDoc and the payment.payment_estCostPerInjection used by buildPayload.
-const PROCEDURE_COST = 123
-const PREPROC_LABELS = ['Fill up IVT Pre-Procedure Acknowledgemnt Form', 'Fill up pre-procedure']
+const DEFAULT_PROCEDURE_COST = 123
+const PREPROC_LABELS = ['Fill up IVT Pre-Procedure Acknowledgement Form', 'Fill up IVT Pre-Procedure Acknowledgement Form', 'Fill up pre-procedure']
 const POSTOP_LABELS = ['View Post-IVT Advice Form', 'Fill up post-operation checklist']
 const APPOINTMENT_LABELS = ['Book Appointment', 'Appointment']
+
+function getEstimatedCostForClass(classCode) {
+  if (classCode === 'PTE') return 300
+  if (classCode === 'SUB') return 200
+  return DEFAULT_PROCEDURE_COST
+}
+
+function getFallbackRange(classCode, performer, injections) {
+  const inj = Math.max(1, Number(injections) || 1)
+  const cls = (classCode || '').toUpperCase()
+  const perf = (performer || '').toUpperCase()
+  if (cls === 'SUB' && perf === 'DOCTOR') return { min: 86 * inj, max: 310 * inj }
+  if (cls === 'SUB' && perf === 'NURSE') return { min: 62 * inj, max: 220 * inj }
+  if (cls === 'PTE' && perf === 'DOCTOR') return { min: 430 * inj, max: 480 * inj }
+  if (cls === 'PTE' && perf === 'NURSE') return { min: 300 * inj, max: 350 * inj }
+  const fallback = getEstimatedCostForClass(cls)
+  return { min: fallback, max: fallback }
+}
+
+function formatRangeWithCurrency(rangeText) {
+  const raw = String(rangeText || '').trim()
+  if (!raw.includes('-')) {
+    const value = raw.replace(/^\$/, '')
+    return `$${value}`
+  }
+  const [minPart, maxPart] = raw.split('-').map(v => v.trim().replace(/^\$/, ''))
+  return `$${minPart} - $${maxPart}`
+}
 
 function buildPayload(answers, epicRecord) {
   const patientId = epicRecord?.patient_id || 'UNKNOWN'
@@ -26,20 +54,22 @@ function buildPayload(answers, epicRecord) {
       record_name: patientName,
       record_diagnosis: diagnosis,
       record_eyes: answers.record_eyes,
-      record_number_of_injections: epicRecord?.record_number_of_injections || 1,
+      record_number_of_injections: answers.record_number_of_injections || epicRecord?.record_number_of_injections || 1,
       record_validity_of_consent: true,
       record_last3mths_admission: answers.last3mths_admission,
       record_stroke_heartAtt_last6mths: answers.stroke_heartAtt_last6mths,
       record_taking_antibiotics: answers.taking_antibiotics,
       record_pregnant: answers.pregnant,
+      record_class: answers.record_class || null,
+      record_performer: answers.record_performer || null,
     },
     payment: {
       payment_id: `PAY-${patientId}-${Date.now()}`,
       payment_name: patientName,
       payment_diagnosis: diagnosis,
-      payment_maxMedisave: 2150,
-      payment_estCostPerInjection: 123,
-      payment_mode: answers.payment_mode || 'Medisave',
+      payment_maxMedisave: 250,
+      payment_estCostPerInjection: answers.estimated_cost_max || answers.estimated_cost || getEstimatedCostForClass(answers.record_class),
+      payment_mode: answers.payment_mode || 'Medisave (Self)',
     },
   }
 }
@@ -142,8 +172,9 @@ export default function ChatWindow({ onBack }) {
       addMsg({ role: 'bot', type: 'text', content: 'To proceed with the checklist, would you please sign in below?' })
       addMsg({ role: 'bot', type: 'singpass', content: '' })
     } else if (APPOINTMENT_LABELS.includes(label)) {
-      // Placeholder — the real appointment-booking flow will be wired in later.
-      addMsg({ role: 'bot', type: 'text', content: 'Appointment booking is coming soon. In the meantime, please contact the clinic to schedule your appointment.' })
+      setMode('appointment')
+      addMsg({ role: 'bot', type: 'text', content: 'Please share your preferred appointment date and time using the calendar below.' })
+      addMsg({ role: 'bot', type: 'appointment_picker', content: '' })
     } else if (label === 'Return Menu') {
       setMode('welcome')
       setPreProcStep('login')
@@ -157,6 +188,25 @@ export default function ChatWindow({ onBack }) {
       // (INIT_MESSAGES) omits it since you're already at the menu.
       addMsg({ role: 'bot', type: 'welcome', content: '', includeReturnMenu: true })
     }
+  }
+
+  const handleAppointmentSubmit = ({ date, time }) => {
+    if (!date || !time) return
+
+    const dateObj = new Date(`${date}T${time}`)
+    const formatted = Number.isNaN(dateObj.getTime())
+      ? `${date} ${time}`
+      : dateObj.toLocaleString('en-GB', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      })
+
+    addMsg({ role: 'user', type: 'text', content: `Preferred appointment slot: ${formatted}` })
+    addMsg({ role: 'bot', type: 'text', content: `Thanks. Your preferred slot (${formatted}) has been received. Our clinic staff will contact you to confirm availability.` })
   }
 
   const handleSingpassLogin = async (patientId) => {
@@ -332,9 +382,12 @@ export default function ChatWindow({ onBack }) {
               site: latest.record_eyes || epicRecord?.record_eyes || '',
               diagnosis: latest.record_diagnosis || epicRecord?.record_diagnosis || 'H35.31',
               medication: latest.record_medication || epicRecord?.record_medication || '',
-              estCost: 123,
+              estCost: getEstimatedCostForClass(latest.record_class),
               injections: latest.record_number_of_injections || 1,
-              paymentMode: 'Medisave',
+              classCode: latest.record_class || '',
+              performer: latest.record_performer || '',
+              maxMedisaveClaimable: 250,
+              paymentMode: latest.payment_mode || 'Medisave (Self)',
             },
           })
         } catch {
@@ -367,9 +420,12 @@ export default function ChatWindow({ onBack }) {
               site: epicRecord?.record_eyes || '',
               diagnosis: epicRecord?.record_diagnosis || 'H35.31',
               medication: epicRecord?.record_medication || '',
-              estCost: 123,
+              estCost: getEstimatedCostForClass(epicRecord?.record_class),
               injections: epicRecord?.record_number_of_injections || 1,
-              paymentMode: 'Medisave',
+              classCode: epicRecord?.record_class || '',
+              performer: epicRecord?.record_performer || '',
+              maxMedisaveClaimable: 250,
+              paymentMode: epicRecord?.payment_mode || 'Medisave (Self)',
             },
           })
         } finally {
@@ -434,6 +490,47 @@ export default function ChatWindow({ onBack }) {
           pregnant: answered.pregnant,
         }),
       })
+      addMsg({ role: 'bot', type: 'text', content: 'Would you like to proceed with financial counselling now?\n• Yes / No' })
+      setPreProcStep('q_financial_counselling')
+    } else if (preProcStep === 'q_financial_counselling') {
+      if (!lower.startsWith('y') && !lower.startsWith('n')) {
+        addMsg({ role: 'bot', type: 'text', content: 'Sorry, I didn\'t understand that. Please answer Yes or No.\n\nWould you like to proceed with financial counselling now?\n• Yes / No' })
+        return
+      }
+      if (lower.startsWith('n')) {
+        setPreProcStep('complete')
+        setLoading(true)
+        addMsg({ role: 'bot', type: 'text', content: "No problem. I've saved your acknowledgement — you may return to the menu when you're ready." })
+        try {
+          await submitAcknowledgement(buildPayload(formAnswers, epicRecord))
+        } catch {
+          /* Save failed — acknowledgement was already displayed from local answers. */
+        } finally {
+          setLoading(false)
+        }
+        return
+      }
+      addMsg({ role: 'bot', type: 'text', content: 'Are you seeking treatment under Private or Subsidised scheme?\n• Private / Subsidised' })
+      setPreProcStep('q_scheme')
+    } else if (preProcStep === 'q_scheme') {
+      const isPrivate = lower.includes('private')
+      const isSubsidised = lower.includes('subsidised') || lower.includes('subsidized') || lower.includes('subsid')
+      if (!isPrivate && !isSubsidised) {
+        addMsg({ role: 'bot', type: 'text', content: "Sorry, I didn't understand that. Please answer Private or Subsidised.\n\nAre you seeking treatment under Private or Subsidised scheme?" })
+        return
+      }
+      const recordClass = isPrivate ? 'PTE' : 'SUB'
+      setFormAnswers(prev => ({ ...prev, record_class: recordClass }))
+      addMsg({ role: 'bot', type: 'text', content: 'Would you like your procedure to be performed by Doctor or Nurse?\n• Doctor / Nurse' })
+      setPreProcStep('q_performer')
+    } else if (preProcStep === 'q_performer') {
+      const isDoctor = lower.includes('doctor')
+      const isNurse = lower.includes('nurse')
+      if (!isDoctor && !isNurse) {
+        addMsg({ role: 'bot', type: 'text', content: "Sorry, I didn't understand that. Please answer Doctor or Nurse.\n\nWould you like your procedure to be performed by Doctor or Nurse?" })
+        return
+      }
+      setFormAnswers(prev => ({ ...prev, record_performer: isDoctor ? 'Doctor' : 'Nurse' }))
       addMsg({ role: 'bot', type: 'text', content: 'May I confirm your IVT treatment is for right eye, left eye or both?' })
       setPreProcStep('q_eye')
     } else if (preProcStep === 'q_eye') {
@@ -445,12 +542,42 @@ export default function ChatWindow({ onBack }) {
         return
       }
       const eyes = isBoth ? 'OU' : isLeft ? 'OS' : 'OD'
-      setFormAnswers(prev => ({ ...prev, record_eyes: eyes }))
+      const injections = isBoth ? 2 : 1
+      const fallbackRange = getFallbackRange(formAnswers.record_class, formAnswers.record_performer, injections)
+      let updated = {
+        ...formAnswers,
+        record_eyes: eyes,
+        record_number_of_injections: injections,
+        estimated_cost_min: fallbackRange.min,
+        estimated_cost_max: fallbackRange.max,
+        estimated_cost: fallbackRange.max,
+        estimated_cost_range: `${fallbackRange.min} - ${fallbackRange.max}`,
+      }
+      try {
+        const { data } = await calculateBill({
+          recordClass: formAnswers.record_class,
+          performer: formAnswers.record_performer,
+          injections,
+        })
+        if (typeof data?.estimated_cost_min === 'number' && typeof data?.estimated_cost_max === 'number') {
+          const rangeText = `${data.estimated_cost_min} - ${data.estimated_cost_max}`
+          updated = {
+            ...updated,
+            estimated_cost_min: data.estimated_cost_min,
+            estimated_cost_max: data.estimated_cost_max,
+            estimated_cost: data.estimated_cost_max,
+            estimated_cost_range: rangeText,
+          }
+        }
+      } catch {
+        // Fall back to client-side defaults when billing service is unavailable.
+      }
+      setFormAnswers(updated)
       setPreProcStep('cost_confirm')
-      addMsg({ role: 'bot', type: 'text', content: `The total cost of the procedure will be $${PROCEDURE_COST}, do you want to proceed?\n• Yes / No` })
+      addMsg({ role: 'bot', type: 'text', content: `The total cost of the procedure will be ${formatRangeWithCurrency(updated.estimated_cost_range || `${updated.estimated_cost || DEFAULT_PROCEDURE_COST} - ${updated.estimated_cost || DEFAULT_PROCEDURE_COST}`)}, do you want to proceed?\n• Yes / No` })
     } else if (preProcStep === 'cost_confirm') {
       if (!lower.startsWith('y') && !lower.startsWith('n')) {
-        addMsg({ role: 'bot', type: 'text', content: `Sorry, I didn't understand that. Please answer Yes or No.\n\nThe total cost of the procedure will be $${PROCEDURE_COST}, do you want to proceed?` })
+        addMsg({ role: 'bot', type: 'text', content: `Sorry, I didn't understand that. Please answer Yes or No.\n\nThe total cost of the procedure will be ${formatRangeWithCurrency(formAnswers.estimated_cost_range || `${formAnswers.estimated_cost || DEFAULT_PROCEDURE_COST} - ${formAnswers.estimated_cost || DEFAULT_PROCEDURE_COST}`)}, do you want to proceed?` })
         return
       }
       if (lower.startsWith('n')) {
@@ -471,20 +598,34 @@ export default function ChatWindow({ onBack }) {
         return
       }
       setPreProcStep('payment_mode')
-      addMsg({ role: 'bot', type: 'text', content: 'Would you like to use your Medisave or Next-of-Kin (NOK) Medisave?' })
+      addMsg({ role: 'bot', type: 'text', content: 'Please choose your payment mode:\n• Medishield Life / Integrated Plan\n• CSC\n• Medisave (Self)\n• MAF\n• Cash\n• NOK Medisave' })
     } else if (preProcStep === 'payment_mode') {
       const isNok = lower.includes('nok') || lower.includes('next-of-kin') || lower.includes('next of kin')
-      const isMedisave = lower.includes('medisave')
-      if (!isNok && !isMedisave) {
-        addMsg({ role: 'bot', type: 'text', content: "Sorry, I didn't understand that. Please answer Medisave or NOK Medisave." })
+      const isMedisaveSelf = (lower.includes('medisave') && !isNok) || lower.includes('self')
+      const isMediShield = lower.includes('medishield') || lower.includes('integrated plan') || lower.includes('integrated') || lower === 'life' || lower === 'ip'
+      const isCsc = lower === 'csc' || lower.includes('csc')
+      const isMaf = lower === 'maf' || lower.includes('maf')
+      const isCash = lower === 'cash' || lower.includes('cash')
+      if (!isNok && !isMedisaveSelf && !isMediShield && !isCsc && !isMaf && !isCash) {
+        addMsg({ role: 'bot', type: 'text', content: "Sorry, I didn't understand that. Please choose one: Medishield Life / Integrated Plan, CSC, Medisave (Self), MAF, Cash, or NOK Medisave." })
         return
       }
-      const paymentMode = isNok ? 'NOK Medisave' : 'Medisave'
+      const paymentMode = isNok
+        ? 'NOK Medisave'
+        : isMediShield
+          ? 'Medishield Life / Integrated Plan'
+          : isCsc
+            ? 'CSC'
+            : isMaf
+              ? 'MAF'
+              : isCash
+                ? 'Cash'
+                : 'Medisave (Self)'
       const updated = { ...formAnswers, payment_mode: paymentMode }
       setFormAnswers(updated)
       setPreProcStep('complete')
       setLoading(true)
-      addMsg({ role: 'bot', type: 'text', content: 'I will now redirect you to fill up the Medisave form.' })
+      addMsg({ role: 'bot', type: 'text', content: 'Thank you. Here is your Financial Counselling & Advice Form.' })
       try {
         const res = await submitAcknowledgement(buildPayload(updated, epicRecord))
         const record = res.data.record
@@ -504,13 +645,16 @@ export default function ChatWindow({ onBack }) {
             site: confirmedEyes,
             diagnosis: record?.record_diagnosis || 'H35.31',
             medication: record?.record_medication || epicRecord?.record_medication || '',
-            estCost: payment?.payment_estCostPerInjection || PROCEDURE_COST,
-            injections: record?.record_number_of_injections || 1,
+            estCost: updated.estimated_cost_range || `${payment?.payment_estCostPerInjection || updated.estimated_cost || DEFAULT_PROCEDURE_COST}`,
+            injections: record?.record_number_of_injections || updated.record_number_of_injections || 1,
+            classCode: record?.record_class || updated.record_class || '',
+            performer: record?.record_performer || updated.record_performer || '',
+            maxMedisaveClaimable: payment?.payment_maxMedisave || 250,
             paymentMode: payment?.payment_mode || paymentMode,
           },
         })
       } catch {
-        addMsg({ role: 'bot', type: 'financial_doc', content: '', formData: { site: updated.record_eyes, paymentMode } })
+        addMsg({ role: 'bot', type: 'financial_doc', content: '', formData: { site: updated.record_eyes, estCost: updated.estimated_cost_range || `${updated.estimated_cost || DEFAULT_PROCEDURE_COST}`, injections: updated.record_number_of_injections || 1, classCode: updated.record_class || '', performer: updated.record_performer || '', maxMedisaveClaimable: 250, paymentMode } })
       } finally {
         setLoading(false)
       }
@@ -605,17 +749,21 @@ export default function ChatWindow({ onBack }) {
     }
   }
 
-  const showYesNo = mode === 'pre_procedure' && (preProcStep === 'ask_update' || preProcStep === 'q_stroke' || preProcStep === 'q_admission' || preProcStep === 'q_antibiotics' || preProcStep === 'q_pregnant' || preProcStep === 'cost_confirm')
+  const showYesNo = mode === 'pre_procedure' && (preProcStep === 'ask_update' || preProcStep === 'q_stroke' || preProcStep === 'q_admission' || preProcStep === 'q_antibiotics' || preProcStep === 'q_pregnant' || preProcStep === 'q_financial_counselling' || preProcStep === 'cost_confirm')
+  const showScheme = mode === 'pre_procedure' && preProcStep === 'q_scheme'
+  const showPerformer = mode === 'pre_procedure' && preProcStep === 'q_performer'
   const showEye = mode === 'pre_procedure' && preProcStep === 'q_eye'
   const showPaymentMode = mode === 'pre_procedure' && preProcStep === 'payment_mode'
-  const showReturnMenu = mode === 'general_enquiry' || (mode === 'pre_procedure' && preProcStep === 'complete') || (mode === 'post_operation' && postOpStep === 'complete')
+  const showReturnMenu = mode === 'general_enquiry' || mode === 'appointment' || (mode === 'pre_procedure' && preProcStep === 'complete') || (mode === 'post_operation' && postOpStep === 'complete')
   const inputDisabled = !regStep && (
     (mode === 'pre_procedure' && (preProcStep === 'login' || preProcStep === 'complete'))
     || (mode === 'post_operation' && (postOpStep === 'login' || postOpStep === 'complete'))
+    || mode === 'appointment'
   )
 
   const placeholder = regStep ? 'Type your answer…'
     : mode === 'general_enquiry' ? 'Write your message'
+    : mode === 'appointment' ? 'Use the calendar to choose date and time'
     : mode === 'pre_procedure' && !inputDisabled ? 'Write your answer…'
     : 'General Enquiry'
 
@@ -654,6 +802,7 @@ export default function ChatWindow({ onBack }) {
               includeReturnMenu={m.includeReturnMenu}
               onQuickReply={handleQuickReply}
               onSingpassLogin={handleSingpassLogin}
+              onAppointmentSubmit={handleAppointmentSubmit}
             />
           ))}
           {loading && showThinkingBubble && (
@@ -669,13 +818,25 @@ export default function ChatWindow({ onBack }) {
       </div>
 
       {/* Suggestion chips — full-width bg, centred content */}
-      {(showYesNo || showEye || showPaymentMode || showReturnMenu) && (
+      {(showYesNo || showScheme || showPerformer || showEye || showPaymentMode || showReturnMenu) && (
         <div style={{ background: '#fff', borderTop: '1px solid #F0F0F0' }}>
           <div style={{ ...centered, display: 'flex', gap: '8px', padding: '10px 20px', flexWrap: 'wrap' }}>
             {showYesNo && (
               <>
                 <button onClick={() => handlePreProcAnswer('Yes')} style={chipBtn}>Yes</button>
                 <button onClick={() => handlePreProcAnswer('No')} style={chipBtn}>No</button>
+              </>
+            )}
+            {showScheme && (
+              <>
+                <button onClick={() => handlePreProcAnswer('Private')} style={chipBtn}>Private</button>
+                <button onClick={() => handlePreProcAnswer('Subsidised')} style={chipBtn}>Subsidised</button>
+              </>
+            )}
+            {showPerformer && (
+              <>
+                <button onClick={() => handlePreProcAnswer('Doctor')} style={chipBtn}>Doctor</button>
+                <button onClick={() => handlePreProcAnswer('Nurse')} style={chipBtn}>Nurse</button>
               </>
             )}
             {showEye && (
@@ -687,7 +848,11 @@ export default function ChatWindow({ onBack }) {
             )}
             {showPaymentMode && (
               <>
-                <button onClick={() => handlePreProcAnswer('Medisave')} style={chipBtn}>Medisave</button>
+                <button onClick={() => handlePreProcAnswer('Medishield Life / Integrated Plan')} style={chipBtn}>Medishield Life / Integrated Plan</button>
+                <button onClick={() => handlePreProcAnswer('CSC')} style={chipBtn}>CSC</button>
+                <button onClick={() => handlePreProcAnswer('Medisave (Self)')} style={chipBtn}>Medisave (Self)</button>
+                <button onClick={() => handlePreProcAnswer('MAF')} style={chipBtn}>MAF</button>
+                <button onClick={() => handlePreProcAnswer('Cash')} style={chipBtn}>Cash</button>
                 <button onClick={() => handlePreProcAnswer('NOK Medisave')} style={chipBtn}>NOK Medisave</button>
               </>
             )}
