@@ -1,6 +1,6 @@
 import pytest
 
-from models.patient import Patient
+from services.patient.model import Patient
 from services.patient import service as patient_service
 
 pytestmark = pytest.mark.unit

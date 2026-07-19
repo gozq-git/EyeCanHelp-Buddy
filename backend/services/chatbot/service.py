@@ -4,7 +4,7 @@ from datetime import datetime
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from models.payment import Payment
+from .model import Payment
 from .schema import PatientRecordCreate, PatientRecordResponse, PaymentSchema
 from .llm import chat, chat_stream
 

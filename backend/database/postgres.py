@@ -19,9 +19,8 @@ async def init_db():
 
 
 async def _seed_db():
-    from models.patient import Patient
-    from models.ivt import IVT
-    from models.payment import Payment
+    from services.patient.model import IVT, Patient
+    from services.chatbot.model import Payment
     from sqlalchemy.dialects.postgresql import insert
 
     patients = [
