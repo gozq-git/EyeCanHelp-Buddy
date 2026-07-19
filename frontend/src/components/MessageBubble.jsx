@@ -6,7 +6,7 @@ import 'react-datepicker/dist/react-datepicker.css'
 import EyeLogoSVG from './EyeLogoSVG'
 import SingpassLoginButton from './SingpassLoginButton'
 import FinancialCounsellingDoc from './FinancialCounsellingDoc'
-import PostIvtAdviceForm from './PostIvtAdviceForm'
+import PostIvtAdviceDoc from './PostIvtAdviceDoc'
 import AcknowledgementDoc from './AcknowledgementDoc'
 
 const QUICK_REPLY_OPTIONS = [
@@ -203,7 +203,7 @@ export default function MessageBubble({ role, type, content, formData, onQuickRe
   if (type === 'postop_doc') {
     return (
       <div style={{ marginBottom: '12px', maxWidth: '620px' }}>
-        <PostIvtAdviceForm formData={formData} />
+        <PostIvtAdviceDoc formData={formData} />
       </div>
     )
   }

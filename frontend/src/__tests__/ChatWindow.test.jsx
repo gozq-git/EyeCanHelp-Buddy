@@ -624,7 +624,7 @@ describe('ChatWindow — Post-Operation Checklist flow', () => {
     expect(screen.queryByText(/Post Intravitreal Injection/i)).not.toBeInTheDocument()
   })
 
-  it('renders PostIvtAdviceForm after Singpass login', async () => {
+  it('renders PostIvtAdviceDoc after Singpass login', async () => {
     render(<ChatWindow />)
     await userEvent.click(screen.getByRole('button', { name: 'View Post-IVT Advice Form' }))
     await userEvent.click(screen.getByRole('button', { name: /singpass login/i }))

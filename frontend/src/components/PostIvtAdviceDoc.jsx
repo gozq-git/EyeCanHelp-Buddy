@@ -39,7 +39,7 @@ function CB({ checked, label }) {
   )
 }
 
-export default function PostIvtAdviceForm({ formData }) {
+export default function PostIvtAdviceDoc({ formData }) {
   const diagnosis = formData?.record_diagnosis || 'H35.31'
   const condition = DIAGNOSIS_MAP[diagnosis] || diagnosis
   const eye = EYE_MAP[formData?.record_eyes] || null

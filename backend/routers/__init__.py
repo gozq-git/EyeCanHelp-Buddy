@@ -1,3 +1,3 @@
-from routers import epic, acknowledgement, symptom, chatbot, billing
+from routers import epic, acknowledgement, chatbot, billing
 
-__all__ = ["epic", "acknowledgement", "symptom", "chatbot", "billing"]
+__all__ = ["epic", "acknowledgement", "chatbot", "billing"]
