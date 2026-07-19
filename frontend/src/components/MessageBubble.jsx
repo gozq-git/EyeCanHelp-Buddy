@@ -1,6 +1,8 @@
 import React from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import DatePicker from 'react-datepicker'
+import 'react-datepicker/dist/react-datepicker.css'
 import EyeLogoSVG from './EyeLogoSVG'
 import SingpassLoginButton from './SingpassLoginButton'
 import FinancialCounsellingDoc from './FinancialCounsellingDoc'
@@ -9,7 +11,7 @@ import AcknowledgementDoc from './AcknowledgementDoc'
 
 const QUICK_REPLY_OPTIONS = [
   'General Enquiry',
-  'Fill up IVT Pre-Procedure Acknowledgemnt Form',
+  'Fill up IVT Pre-Procedure Acknowledgement Form',
   'View Post-IVT Advice Form',
   'Book Appointment',
 ]
@@ -57,7 +59,92 @@ function WelcomeContent({ onQuickReply, includeReturnMenu }) {
   )
 }
 
-export default function MessageBubble({ role, type, content, formData, onQuickReply, onSingpassLogin, includeReturnMenu }) {
+function AppointmentPickerContent({ onAppointmentSubmit }) {
+  const toIsoDate = (dateValue) => {
+    if (!(dateValue instanceof Date)) return ''
+    const year = dateValue.getFullYear()
+    const month = String(dateValue.getMonth() + 1).padStart(2, '0')
+    const day = String(dateValue.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+  }
+
+  const timeSlots = React.useMemo(() => {
+    const slots = []
+    for (let mins = 8 * 60; mins <= 17 * 60 + 30; mins += 10) {
+      const hh = String(Math.floor(mins / 60)).padStart(2, '0')
+      const mm = String(mins % 60).padStart(2, '0')
+      slots.push(`${hh}:${mm}`)
+    }
+    return slots
+  }, [])
+
+  const [date, setDate] = React.useState(null)
+  const [time, setTime] = React.useState('')
+
+  const canSubmit = date && time
+
+  return (
+    <div style={{ background: '#F0F0F0', borderRadius: '4px 20px 20px 20px', padding: '12px 14px', maxWidth: '420px' }}>
+      <p style={{ margin: '0 0 10px', fontSize: '14px', color: '#222' }}>
+        Please select your preferred date and time.
+      </p>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        <label htmlFor="preferred-date" style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '13px', color: '#444' }}>
+          Preferred date
+          <DatePicker
+            id="preferred-date"
+            aria-label="Preferred date"
+            selected={date}
+            onChange={(value) => setDate(value)}
+            filterDate={(value) => value.getDay() !== 0 && value.getDay() !== 6}
+            dateFormat="yyyy-MM-dd"
+            placeholderText="YYYY-MM-DD"
+            autoComplete="off"
+            customInput={<input style={{ border: '1px solid #D8D8D8', borderRadius: '8px', padding: '8px', fontSize: '14px', background: '#fff' }} />}
+          />
+        </label>
+        <label style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '13px', color: '#444' }}>
+          Preferred time
+          <select
+            aria-label="Preferred time"
+            value={time}
+            onChange={(e) => setTime(e.target.value)}
+            style={{ border: '1px solid #D8D8D8', borderRadius: '8px', padding: '8px', fontSize: '14px', background: '#fff' }}
+          >
+            <option value="">Select a time slot</option>
+            {timeSlots.map(slot => (
+              <option key={slot} value={slot}>{slot}</option>
+            ))}
+          </select>
+        </label>
+        <p style={{ margin: 0, fontSize: '12px', color: '#666' }}>
+          Operating hours
+          <br /> 
+          Mondays to Fridays: 08:00 to 17:30
+        </p>
+        <button
+          type="button"
+          disabled={!canSubmit}
+          onClick={() => onAppointmentSubmit?.({ date: toIsoDate(date), time })}
+          style={{
+            marginTop: '2px',
+            border: 'none',
+            borderRadius: '16px',
+            padding: '10px 12px',
+            fontSize: '14px',
+            cursor: canSubmit ? 'pointer' : 'not-allowed',
+            background: canSubmit ? '#3B6EF8' : '#BFC8E8',
+            color: '#fff',
+          }}
+        >
+          Confirm appointment slot
+        </button>
+      </div>
+    </div>
+  )
+}
+
+export default function MessageBubble({ role, type, content, formData, onQuickReply, onSingpassLogin, includeReturnMenu, onAppointmentSubmit }) {
   const isUser = role === 'user'
 
   if (type === 'welcome') {
@@ -118,6 +205,15 @@ export default function MessageBubble({ role, type, content, formData, onQuickRe
         <div style={{ flex: 1, maxWidth: '80%' }}>
           <SingpassLoginButton onLogin={onSingpassLogin} />
         </div>
+      </div>
+    )
+  }
+
+  if (type === 'appointment_picker') {
+    return (
+      <div style={{ display: 'flex', alignItems: 'flex-end', gap: '6px', marginBottom: '10px' }}>
+        <EyeLogoSVG size={24} />
+        <AppointmentPickerContent onAppointmentSubmit={onAppointmentSubmit} />
       </div>
     )
   }

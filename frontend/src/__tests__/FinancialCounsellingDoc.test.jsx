@@ -99,29 +99,71 @@ describe('FinancialCounsellingDoc', () => {
     expect(checkboxFor('RIGHT')).toBeChecked()
   })
 
-  it('ticks Medisave when paymentMode is "Medisave"', () => {
-    render(<FinancialCounsellingDoc formData={{ paymentMode: 'Medisave' }} />)
-    expect(checkboxFor('Medisave')).toBeChecked()
+  it('ticks Class PTE when classCode is PTE', () => {
+    render(<FinancialCounsellingDoc formData={{ classCode: 'PTE' }} />)
+    expect(checkboxFor('PTE')).toBeChecked()
+    expect(checkboxFor('SUB')).not.toBeChecked()
+  })
+
+  it('ticks Class SUB when classCode is SUB', () => {
+    render(<FinancialCounsellingDoc formData={{ classCode: 'SUB' }} />)
+    expect(checkboxFor('SUB')).toBeChecked()
+    expect(checkboxFor('PTE')).not.toBeChecked()
+  })
+
+  it('checks Nurse-led procedure when performer is Nurse', () => {
+    render(<FinancialCounsellingDoc formData={{ performer: 'Nurse' }} />)
+    expect(checkboxFor('1B SL700V1A — Nurse-Led Intravitreal Inj')).toBeChecked()
+    expect(checkboxFor('1B SL700VX — Intravitreal Inj')).not.toBeChecked()
+  })
+
+  it('checks doctor procedure when performer is Doctor', () => {
+    render(<FinancialCounsellingDoc formData={{ performer: 'Doctor' }} />)
+    expect(checkboxFor('1B SL700VX — Intravitreal Inj')).toBeChecked()
+    expect(checkboxFor('1B SL700V1A — Nurse-Led Intravitreal Inj')).not.toBeChecked()
+  })
+
+  it('ticks Medisave (Self) when paymentMode is "Medisave (Self)"', () => {
+    render(<FinancialCounsellingDoc formData={{ paymentMode: 'Medisave (Self)' }} />)
+    expect(checkboxFor('Medisave (Self)')).toBeChecked()
     expect(checkboxFor('Cash')).not.toBeChecked()
   })
 
-  it('ticks Medisave when paymentMode is "NOK Medisave" (next-of-kin Medisave variant)', () => {
-    // NOK Medisave is operationally still a Medisave payment — the financial form
-    // ticks the same checkbox; the NOK detail goes on a separate Medisave form.
+  it('ticks NOK Medisave when paymentMode is "NOK Medisave"', () => {
     render(<FinancialCounsellingDoc formData={{ paymentMode: 'NOK Medisave' }} />)
-    expect(checkboxFor('Medisave')).toBeChecked()
+    expect(checkboxFor('NOK Medisave')).toBeChecked()
     expect(checkboxFor('Cash')).not.toBeChecked()
+  })
+
+  it('ticks Medishield Life / Integrated Plan when selected', () => {
+    render(<FinancialCounsellingDoc formData={{ paymentMode: 'Medishield Life / Integrated Plan' }} />)
+    expect(checkboxFor('Medishield Life / Integrated Plan')).toBeChecked()
+  })
+
+  it('ticks CSC when selected', () => {
+    render(<FinancialCounsellingDoc formData={{ paymentMode: 'CSC' }} />)
+    expect(checkboxFor('CSC')).toBeChecked()
+  })
+
+  it('ticks MAF when selected', () => {
+    render(<FinancialCounsellingDoc formData={{ paymentMode: 'MAF' }} />)
+    expect(checkboxFor('MAF')).toBeChecked()
   })
 
   it('does NOT tick Medisave when paymentMode is Cash', () => {
     render(<FinancialCounsellingDoc formData={{ paymentMode: 'Cash' }} />)
-    expect(checkboxFor('Medisave')).not.toBeChecked()
+    expect(checkboxFor('Medisave (Self)')).not.toBeChecked()
     expect(checkboxFor('Cash')).toBeChecked()
   })
 
-  it('renders the Medisave payment mode option', () => {
+  it('renders the requested payment mode options', () => {
     render(<FinancialCounsellingDoc />)
-    expect(screen.getByText('Medisave')).toBeInTheDocument()
+    expect(screen.getByText('Medishield Life / Integrated Plan')).toBeInTheDocument()
+    expect(screen.getByText('CSC')).toBeInTheDocument()
+    expect(screen.getByText('Medisave (Self)')).toBeInTheDocument()
+    expect(screen.getByText('MAF')).toBeInTheDocument()
+    expect(screen.getByText('Cash')).toBeInTheDocument()
+    expect(screen.getByText('NOK Medisave')).toBeInTheDocument()
   })
 
   it('renders the counselling-staff and patient signature lines', () => {
