@@ -11,11 +11,14 @@ tests/
 ├── conftest.py            # shared fixtures: in-memory SQLite, fake Mongo,
 │                          #   TestClient with all I/O dependencies overridden
 ├── unit/                  # fast, isolated — no DB / no network
-│   ├── test_symptom_service.py
+│   ├── test_billing_service.py
+│   ├── test_epic_service.py
 │   ├── test_llm_service.py     # pure transcript/response-parsing helpers
+│   ├── test_llm_service_runtime.py
+│   ├── test_ivt_schema.py
 │   └── test_schemas.py
 ├── integration/           # full FastAPI routes via TestClient
-│   ├── test_root_and_symptom.py
+│   ├── test_root_api.py
 │   ├── test_chatbot_api.py     # LLM/AgentCore mocked
 │   ├── test_epic_api.py        # EPIC facade mocked
 │   ├── test_patient_api.py     # SQLite-backed ORM round-trip
@@ -36,7 +39,7 @@ tests/
 
 # with coverage + HTML artifacts (written to ../reports/backend)
 .venv/bin/python -m pytest \
-  --cov=services --cov=routers --cov=schemas --cov=models --cov=database \
+  --cov=services --cov=database \
   --cov-report=html:../reports/backend/coverage \
   --html=../reports/backend/report.html --self-contained-html
 ```
@@ -49,8 +52,8 @@ default collection.
 * **No external services.** PostgreSQL → in-memory SQLite (aiosqlite), MongoDB →
   in-process fake, LLM/AgentCore → mocked. The FastAPI lifespan's DB init is
   patched to no-ops so the TestClient starts instantly and offline.
-* **Unit** tests target pure logic (symptom classification, prompt building,
-  response parsing, schema validation).
+* **Unit** tests target pure logic (billing math, prompt building, response
+  parsing, schema validation, and EPIC service behavior).
 * **Integration** tests exercise each `/api/...` route end-to-end through the
   real FastAPI stack with those dependencies overridden.
 

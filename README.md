@@ -1,43 +1,51 @@
 # EyeCanHelp Buddy
 
-## Backend (02-use-cases Style Multi-Agent Structure)
+## Backend
 
-The backend in [backend](backend) now follows the 02-use-cases layout conventions from `awslabs/agentcore-samples` with an `agents/` root and per-agent packages.
+The backend in [backend](backend) now has two aligned parts:
+
+- A FastAPI application with service-isolated domains under [backend/services](backend/services)
+- An AgentCore coordinator runtime under [backend/agents/coordinator](backend/agents/coordinator)
 
 Detailed package docs:
 - [backend/agents/README.md](backend/agents/README.md)
 - [backend/agents/coordinator/README.md](backend/agents/coordinator/README.md)
-- [backend/agents/financial/README.md](backend/agents/financial/README.md)
-- [backend/agents/healthcare/README.md](backend/agents/healthcare/README.md)
 - [backend/tests/README.md](backend/tests/README.md)
 
 ### Project structure
 
 ```text
 backend/
+├── main.py
+├── database/
+├── services/
+│   ├── billing/
+│   │   ├── router.py
+│   │   ├── service.py
+│   │   ├── model.py
+│   │   └── schema.py
+│   ├── patient/
+│   │   ├── router.py
+│   │   ├── service.py
+│   │   ├── model.py
+│   │   └── schema.py
+│   └── chatbot/
+│       ├── router.py                # /chat and /acknowledgement endpoints
+│       ├── service.py               # chat + acknowledgement persistence logic
+│       ├── llm.py                   # AgentCore runtime invocation client
+│       ├── model.py
+│       └── schema.py
 ├── agents/
 │   ├── coordinator/
 │   │   ├── __init__.py
 │   │   ├── main.py
 │   │   ├── agent.py
-│   │   ├── subagent_router.py
+│   │   ├── llm.py
+│   │   ├── specialists/
 │   │   ├── tools/
-│   │   │   ├── __init__.py
-│   │   │   └── routing_tools.py
+│   │   │   └── kb_tools.py
 │   │   ├── Dockerfile
 │   │   └── requirements.txt
-│   ├── financial/
-│   │   ├── __init__.py
-│   │   ├── main.py
-│   │   ├── agent.py
-│   │   ├── Dockerfile
-│   │   └── requirements.txt
-│   └── healthcare/
-│       ├── __init__.py
-│       ├── main.py
-│       ├── agent.py
-│       ├── Dockerfile
-│       └── requirements.txt
 ├── tests/
 │   └── test_multi_agent.py
 ├── requirements.txt
@@ -45,6 +53,16 @@ backend/
 ```
 
 The coordinator delegates to specialists through `bedrock-agentcore:InvokeAgentRuntime`, matching the multi-agent runtime examples in [awslabs/agentcore-samples](https://github.com/awslabs/agentcore-samples).
+
+### Run FastAPI backend locally
+
+```powershell
+cd backend
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt -r requirements-dev.txt
+python -m uvicorn main:app --host 0.0.0.0 --port 8000
+```
 
 ### Required AWS setup
 
@@ -72,24 +90,12 @@ python agents/coordinator/main.py
 
 The runtime exposes AgentCore-compatible endpoints (for example `/invocations`) on port `8080`.
 
-### Runtime entrypoints
+### Agent runtime entrypoints
 
 Coordinator runtime:
 
 ```powershell
 python agents/coordinator/main.py
-```
-
-Financial specialist runtime:
-
-```powershell
-python agents/financial/main.py
-```
-
-Healthcare specialist runtime:
-
-```powershell
-python agents/healthcare/main.py
 ```
 
 Each runtime expects a payload containing `prompt`, for example:
@@ -102,12 +108,10 @@ Each runtime expects a payload containing `prompt`, for example:
 
 ## Docker
 
-Build and run each runtime from repo root (sample-style per-agent Dockerfiles):
+Build and run the coordinator runtime from repo root:
 
 ```powershell
 docker build -t eyecanhelp-coordinator:local -f backend/agents/coordinator/Dockerfile ./backend
-docker build -t eyecanhelp-financial:local -f backend/agents/financial/Dockerfile ./backend
-docker build -t eyecanhelp-healthcare:local -f backend/agents/healthcare/Dockerfile ./backend
 
 # Coordinator (requires specialist runtime ARNs)
 docker run --rm -p 8080:8080 \
