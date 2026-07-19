@@ -13,7 +13,7 @@ def test_chat_returns_mocked_reply(client, monkeypatch):
         assert messages[-1]["content"] == "What is a cataract?"
         return "A cataract is a clouding of the eye's lens."
 
-    monkeypatch.setattr("routers.chatbot.chat", fake_chat)
+    monkeypatch.setattr("services.chatbot.router.chat", fake_chat)
 
     resp = client.post(
         "/api/chat",
@@ -35,7 +35,7 @@ def test_chat_stream_returns_sse_frames(client, monkeypatch):
         yield "A cataract"
         yield " is a clouding"
 
-    monkeypatch.setattr("routers.chatbot.chat_stream", fake_chat_stream)
+    monkeypatch.setattr("services.chatbot.router.chat_stream", fake_chat_stream)
 
     with client.stream(
         "POST",
@@ -58,8 +58,8 @@ def test_chat_stream_emits_heartbeat_events(client, monkeypatch):
         await asyncio.sleep(0.03)
         yield "token"
 
-    monkeypatch.setattr("routers.chatbot.chat_stream", fake_chat_stream)
-    monkeypatch.setattr("routers.chatbot.HEARTBEAT_INTERVAL_SECONDS", 0.01)
+    monkeypatch.setattr("services.chatbot.router.chat_stream", fake_chat_stream)
+    monkeypatch.setattr("services.chatbot.router.HEARTBEAT_INTERVAL_SECONDS", 0.01)
 
     with client.stream(
         "POST",

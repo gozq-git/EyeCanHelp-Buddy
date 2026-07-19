@@ -1,23 +1,9 @@
 from fastapi import APIRouter
-from pydantic import BaseModel
-from services.billing_service import estimate_bill
+
+from .schema import BillingRequest, BillingResponse
+from .service import estimate_bill
 
 router = APIRouter(prefix="/billing", tags=["Billing"])
-
-
-class BillingRequest(BaseModel):
-    record_class: str
-    performer: str
-    injections: int = 1
-
-
-class BillingResponse(BaseModel):
-    record_class: str
-    performer: str
-    injections: int
-    estimated_cost_min: float
-    estimated_cost_max: float
-    max_medisave_claimable: float
 
 
 @router.post("/calculate", response_model=BillingResponse)

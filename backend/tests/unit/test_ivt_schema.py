@@ -1,6 +1,6 @@
 import pytest
 
-from schemas.ivt import IVTSchema
+from services.patient.schema import IVTSchema
 
 pytestmark = pytest.mark.unit
 

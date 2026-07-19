@@ -1,11 +1,11 @@
-"""Unit tests for the pure helper functions in services/llm_service.py.
+"""Unit tests for the pure helper functions in services/chatbot/llm.py.
 
 These cover the deterministic transcript-building and response-parsing logic
 without invoking AgentCore / AWS.
 """
 import pytest
 
-from services.llm_service import (
+from services.chatbot.llm import (
     _build_prompt,
     _extract_text,
     _extract_region_from_arn,

@@ -1,27 +1,22 @@
-# LLM chatbot endpoint — orchestrates UC1/UC2/UC3 via natural language
 import asyncio
 import os
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
-from services.llm_service import chat, chat_stream
+from sqlalchemy.ext.asyncio import AsyncSession
 
-router = APIRouter(prefix="/chat", tags=["Chatbot"])
+from database.postgres import get_db
+import database.mongo as mongo_module
+from .schema import (
+    AcknowledgementRequest,
+    AcknowledgementResponse,
+    ChatRequest,
+    ChatResponse,
+)
+from .service import chat, chat_stream, save_patient_acknowledgement, save_payment
 
-
-class ChatMessage(BaseModel):
-    role: str   # "user" | "assistant"
-    content: str
-
-
-class ChatRequest(BaseModel):
-    messages: list[ChatMessage]
-
-
-class ChatResponse(BaseModel):
-    reply: str
-
+chat_router = APIRouter(prefix="/chat", tags=["Chatbot"])
+acknowledgement_router = APIRouter(prefix="/acknowledgement", tags=["Acknowledgement"])
 
 HEARTBEAT_INTERVAL_SECONDS = float(os.getenv("CHAT_STREAM_HEARTBEAT_SECONDS", "1"))
 
@@ -40,7 +35,7 @@ def _to_sse_event(event: str, data: str) -> str:
     return f"event: {event}\n{payload}\n"
 
 
-@router.post("", response_model=ChatResponse)
+@chat_router.post("", response_model=ChatResponse)
 async def chatbot(request: ChatRequest, stream: bool = Query(default=False)):
     messages = [{"role": m.role, "content": m.content} for m in request.messages]
     if stream:
@@ -58,7 +53,6 @@ async def chatbot(request: ChatRequest, stream: bool = Query(default=False)):
                         )
                         pending_next = None
                     except asyncio.TimeoutError:
-                        # Keep long-lived connections alive through intermediary proxies.
                         yield _to_sse_event("heartbeat", "ping")
                         continue
                     except StopAsyncIteration:
@@ -84,3 +78,33 @@ async def chatbot(request: ChatRequest, stream: bool = Query(default=False)):
 
     reply = await chat(messages)
     return ChatResponse(reply=reply)
+
+
+@acknowledgement_router.get("/latest/{patient_id}")
+async def get_latest_acknowledgement(patient_id: str):
+    mongo_db = mongo_module.get_mongo_db()
+    doc = await mongo_db["TBL_PATIENT_RECORDS"].find_one(
+        {"patient_id": patient_id},
+        sort=[("issued", -1)],
+    )
+    if not doc:
+        raise HTTPException(status_code=404, detail="No record found for patient")
+    doc.pop("_id", None)
+    return doc
+
+
+@acknowledgement_router.post("", response_model=AcknowledgementResponse)
+async def submit_acknowledgement(
+    request: AcknowledgementRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    mongo_db = mongo_module.get_mongo_db()
+
+    record = await save_patient_acknowledgement(request.patient_record, mongo_db)
+    payment = await save_payment(request.payment, db)
+
+    return AcknowledgementResponse(
+        record=record,
+        payment=payment,
+        message="Patient acknowledgement recorded successfully.",
+    )
