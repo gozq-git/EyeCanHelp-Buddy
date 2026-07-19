@@ -6,7 +6,7 @@ import 'react-datepicker/dist/react-datepicker.css'
 import EyeLogoSVG from './EyeLogoSVG'
 import SingpassLoginButton from './SingpassLoginButton'
 import FinancialCounsellingDoc from './FinancialCounsellingDoc'
-import PostOpChecklistDoc from './PostOpChecklistDoc'
+import PostIvtAdviceDoc from './PostIvtAdviceDoc'
 import AcknowledgementDoc from './AcknowledgementDoc'
 
 const QUICK_REPLY_OPTIONS = [
@@ -60,6 +60,16 @@ function WelcomeContent({ onQuickReply, includeReturnMenu }) {
 }
 
 function AppointmentPickerContent({ onAppointmentSubmit }) {
+  const controlStyle = {
+    width: '100%',
+    boxSizing: 'border-box',
+    border: '1px solid #D8D8D8',
+    borderRadius: '8px',
+    padding: '8px',
+    fontSize: '14px',
+    background: '#fff',
+  }
+
   const toIsoDate = (dateValue) => {
     if (!(dateValue instanceof Date)) return ''
     const year = dateValue.getFullYear()
@@ -100,7 +110,7 @@ function AppointmentPickerContent({ onAppointmentSubmit }) {
             dateFormat="yyyy-MM-dd"
             placeholderText="YYYY-MM-DD"
             autoComplete="off"
-            customInput={<input style={{ border: '1px solid #D8D8D8', borderRadius: '8px', padding: '8px', fontSize: '14px', background: '#fff' }} />}
+            customInput={<input style={controlStyle} />}
           />
         </label>
         <label style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '13px', color: '#444' }}>
@@ -109,7 +119,7 @@ function AppointmentPickerContent({ onAppointmentSubmit }) {
             aria-label="Preferred time"
             value={time}
             onChange={(e) => setTime(e.target.value)}
-            style={{ border: '1px solid #D8D8D8', borderRadius: '8px', padding: '8px', fontSize: '14px', background: '#fff' }}
+            style={controlStyle}
           >
             <option value="">Select a time slot</option>
             {timeSlots.map(slot => (
@@ -193,7 +203,7 @@ export default function MessageBubble({ role, type, content, formData, onQuickRe
   if (type === 'postop_doc') {
     return (
       <div style={{ marginBottom: '12px', maxWidth: '620px' }}>
-        <PostOpChecklistDoc formData={formData} />
+        <PostIvtAdviceDoc formData={formData} />
       </div>
     )
   }

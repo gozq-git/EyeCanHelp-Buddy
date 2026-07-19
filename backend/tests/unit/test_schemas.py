@@ -3,10 +3,8 @@ import pytest
 from datetime import datetime
 from pydantic import ValidationError
 
-from schemas.patient import PatientSchema
-from schemas.payment import PaymentSchema
-from schemas.patient_record import PatientRecordCreate, PatientRecordResponse
-from schemas.ivt import IVTSchema
+from services.patient.schema import IVTSchema, PatientSchema
+from services.chatbot.schema import PaymentSchema, PatientRecordCreate, PatientRecordResponse
 
 pytestmark = pytest.mark.unit
 

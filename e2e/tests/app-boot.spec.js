@@ -11,7 +11,7 @@ test.describe('App boot flow', () => {
 
     // Chat screen shows the four quick-reply pills.
     await expect(page.getByRole('button', { name: 'General Enquiry' })).toBeVisible()
-    await expect(page.getByRole('button', { name: 'Fill up IVT Pre-Procedure Acknowledgemnt Form' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Fill up IVT Pre-Procedure Acknowledgement Form' })).toBeVisible()
     await expect(page.getByRole('button', { name: 'View Post-IVT Advice Form' })).toBeVisible()
   })
 

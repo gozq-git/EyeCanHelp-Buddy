@@ -14,9 +14,6 @@ export const getEpicRecord = (patientId) =>
 export const submitAcknowledgement = (data) =>
   api.post('/acknowledgement', data)
 
-export const assessSymptoms = (patientId, symptomDescription) =>
-  api.post('/symptoms', { patient_id: patientId, symptom_description: symptomDescription })
-
 export const sendChatMessage = (messages) =>
   api.post('/chat', { messages })
 

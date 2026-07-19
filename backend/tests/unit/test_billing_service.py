@@ -1,6 +1,6 @@
 import pytest
 
-from services.billing_service import estimate_bill
+from services.billing.service import estimate_bill
 
 
 pytestmark = pytest.mark.unit

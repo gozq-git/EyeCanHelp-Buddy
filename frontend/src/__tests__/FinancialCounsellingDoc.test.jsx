@@ -61,9 +61,9 @@ describe('FinancialCounsellingDoc', () => {
     expect(checkboxFor('Others')).toBeChecked()
   })
 
-  it('falls back to Faricimab when medication is empty string (must tally with PostOp default)', () => {
+  it('falls back to Faricimab when medication is empty string (must tally with Post-IVT advice default)', () => {
     // Empty string from a Mongo doc / missing EPIC record must not silently become "Others".
-    // PostOpChecklistDoc defaults to 'Faricimab (Vabysmo)' when record_medication is absent;
+    // PostIvtAdviceDoc defaults to 'Faricimab (Vabysmo)' when record_medication is absent;
     // this form must do the same so they stay in sync.
     render(<FinancialCounsellingDoc formData={{ medication: '' }} />)
     expect(checkboxFor('Faricimab')).toBeChecked()

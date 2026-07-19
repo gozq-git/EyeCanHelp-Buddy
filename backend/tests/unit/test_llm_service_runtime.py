@@ -1,6 +1,6 @@
 import pytest
 
-from services import llm_service
+from services.chatbot import llm as llm_service
 
 pytestmark = pytest.mark.unit
 

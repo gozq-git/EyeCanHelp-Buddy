@@ -115,8 +115,8 @@ def client(monkeypatch, sqlite_sessionmaker, fake_mongo):
 
     # Routers/services that reach Mongo directly (not via Depends) get the fake.
     monkeypatch.setattr("database.mongo.get_mongo_db", lambda: fake_mongo)
-    monkeypatch.setattr("routers.acknowledgement.get_mongo_db", lambda: fake_mongo)
-    monkeypatch.setattr("services.epic_service.get_mongo_db", lambda: fake_mongo)
+    monkeypatch.setattr("services.chatbot.router.mongo_module.get_mongo_db", lambda: fake_mongo)
+    monkeypatch.setattr("services.patient.service.get_mongo_db", lambda: fake_mongo)
 
     with TestClient(main.app) as test_client:
         yield test_client

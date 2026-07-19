@@ -1,12 +1,11 @@
 """Integration tests for the UC1 EPIC lookup endpoints.
 
-The EPIC facade (services.epic_service) is mocked so the route logic — including
-the 404 paths — is verified without touching Postgres/Mongo.
+The patient service facade is mocked so the route logic — including the 404
+paths — is verified without touching Postgres/Mongo.
 """
 import pytest
 
-from schemas.patient import PatientSchema
-from schemas.patient_record import PatientRecordResponse
+from services.patient.schema import PatientSchema, PatientRecordResponse
 
 pytestmark = pytest.mark.integration
 
@@ -15,7 +14,7 @@ def test_get_patient_found(client, monkeypatch):
     async def fake_get_patient(patient_id):
         return PatientSchema(patient_id=patient_id, patient_name="Tan Ah Kow", patient_dob="1952-08-12")
 
-    monkeypatch.setattr("routers.epic.get_patient_from_epic", fake_get_patient)
+    monkeypatch.setattr("services.patient.router.get_patient_from_epic", fake_get_patient)
 
     resp = client.get("/api/epic/patient/P001")
     assert resp.status_code == 200
@@ -28,7 +27,7 @@ def test_get_patient_not_found(client, monkeypatch):
     async def fake_get_patient(patient_id):
         return None
 
-    monkeypatch.setattr("routers.epic.get_patient_from_epic", fake_get_patient)
+    monkeypatch.setattr("services.patient.router.get_patient_from_epic", fake_get_patient)
 
     resp = client.get("/api/epic/patient/UNKNOWN")
     assert resp.status_code == 404
@@ -51,7 +50,7 @@ def test_get_patient_record_found(client, monkeypatch):
             record_pregnant=False,
         )
 
-    monkeypatch.setattr("routers.epic.get_patient_record_from_epic", fake_get_record)
+    monkeypatch.setattr("services.patient.router.get_patient_record_from_epic", fake_get_record)
 
     resp = client.get("/api/epic/patient/P001/record")
     assert resp.status_code == 200
@@ -62,7 +61,7 @@ def test_get_patient_record_not_found(client, monkeypatch):
     async def fake_get_record(patient_id):
         return None
 
-    monkeypatch.setattr("routers.epic.get_patient_record_from_epic", fake_get_record)
+    monkeypatch.setattr("services.patient.router.get_patient_record_from_epic", fake_get_record)
 
     resp = client.get("/api/epic/patient/UNKNOWN/record")
     assert resp.status_code == 404

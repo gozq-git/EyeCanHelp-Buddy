@@ -32,7 +32,7 @@ test.describe('Real backend integration @integration', () => {
     await gotoChat(page)
 
     await page.getByRole('button', { name: 'General Enquiry' }).click()
-    await expect(page.getByText(/general enquiries about the eye/i)).toBeVisible()
+    await expect(page.getByText(/general enquiries about eye/i)).toBeVisible()
 
     const input = page.getByPlaceholder('Write your message')
     await input.fill('What is a cataract?')

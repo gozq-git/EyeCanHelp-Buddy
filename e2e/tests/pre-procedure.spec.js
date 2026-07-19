@@ -6,30 +6,34 @@ test.describe('Pre-procedure acknowledgement flow', () => {
     await mockBackend(page)
     await gotoChat(page)
 
-    await page.getByRole('button', { name: 'Fill up IVT Pre-Procedure Acknowledgemnt Form' }).click()
+    await page.getByRole('button', { name: 'Fill up IVT Pre-Procedure Acknowledgement Form' }).click()
     await expect(page.getByText(/would you please sign in/i)).toBeVisible()
 
     await singpassLogin(page, 'P001')
     await expect(page.getByText(/Welcome back, Tan Ah Kow/i)).toBeVisible({ timeout: 10_000 })
 
-    // ask_update → 4 medical questions → eye → cost confirm → payment mode → submit
+    // ask_update → 4 medical questions → financial counselling → scheme → performer
+    // → eye → cost confirm → payment mode → submit
     await page.getByRole('button', { name: 'Yes', exact: true }).click()     // ask_update
     await page.getByRole('button', { name: 'No', exact: true }).click()      // q_stroke
     await page.getByRole('button', { name: 'No', exact: true }).click()      // q_admission
     await page.getByRole('button', { name: 'No', exact: true }).click()      // q_antibiotics
     await page.getByRole('button', { name: 'No', exact: true }).click()      // q_pregnant
+    await page.getByRole('button', { name: 'Yes', exact: true }).click()     // q_financial_counselling
+    await page.getByRole('button', { name: 'Private', exact: true }).click() // q_scheme
+    await page.getByRole('button', { name: 'Doctor', exact: true }).click()  // q_performer
     await page.getByRole('button', { name: 'Right', exact: true }).click()   // q_eye → OD
     await page.getByRole('button', { name: 'Yes', exact: true }).click()     // cost_confirm
-    await page.getByRole('button', { name: 'Medisave', exact: true }).click() // payment_mode → submit
+    await page.getByRole('button', { name: 'Medisave (Self)', exact: true }).click() // payment_mode → submit
 
-    await expect(page.getByText(/Financial Counselling & Advice/i)).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByText('Financial Counselling & Advice', { exact: true })).toBeVisible({ timeout: 10_000 })
   })
 
   test('shows the Singpass login prompt with a username field before login', async ({ page }) => {
     await mockBackend(page)
     await gotoChat(page)
 
-    await page.getByRole('button', { name: 'Fill up IVT Pre-Procedure Acknowledgemnt Form' }).click()
+    await page.getByRole('button', { name: 'Fill up IVT Pre-Procedure Acknowledgement Form' }).click()
     await expect(page.getByRole('button', { name: /Singpass Login/i })).toBeVisible()
     await expect(page.getByPlaceholder('username')).toBeVisible()
   })

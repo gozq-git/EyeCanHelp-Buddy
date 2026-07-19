@@ -9,7 +9,9 @@ from database.mongo import close_mongo_client, init_mongo
 import models.patient  # noqa: F401 — registers TBL_PATIENT with SQLAlchemy metadata
 import models.ivt      # noqa: F401 — registers TBL_IVT with SQLAlchemy metadata
 import models.payment  # noqa: F401 — registers TBL_PAYMENT with SQLAlchemy metadata
-from routers import epic, acknowledgement, symptom, chatbot, patient, billing
+from services.billing.router import router as billing_router
+from services.chatbot.router import acknowledgement_router, chat_router
+from services.patient.router import epic_router, patient_router
 
 
 @asynccontextmanager
@@ -28,12 +30,11 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="EyeCanHelp Buddy Backend", lifespan=lifespan)
 
-app.include_router(epic.router, prefix="/api")
-app.include_router(acknowledgement.router, prefix="/api")
-app.include_router(symptom.router, prefix="/api")
-app.include_router(chatbot.router, prefix="/api")
-app.include_router(patient.router, prefix="/api")
-app.include_router(billing.router, prefix="/api")
+app.include_router(epic_router, prefix="/api")
+app.include_router(acknowledgement_router, prefix="/api")
+app.include_router(chat_router, prefix="/api")
+app.include_router(patient_router, prefix="/api")
+app.include_router(billing_router, prefix="/api")
 
 
 @app.get("/")

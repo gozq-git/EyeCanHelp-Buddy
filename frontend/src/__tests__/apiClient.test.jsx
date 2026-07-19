@@ -15,7 +15,6 @@ vi.mock('axios', () => ({
 }))
 
 import {
-  assessSymptoms,
   createPatient,
   getEpicPatient,
   getEpicRecord,
@@ -47,15 +46,10 @@ describe('api client', () => {
 
   it('calls expected POST endpoints and payloads', () => {
     submitAcknowledgement({ hello: 'world' })
-    assessSymptoms('P001', 'watery eyes')
     sendChatMessage([{ role: 'user', content: 'hi' }])
     createPatient({ patient_id: 'P003' })
 
     expect(mocks.mockPost).toHaveBeenCalledWith('/acknowledgement', { hello: 'world' })
-    expect(mocks.mockPost).toHaveBeenCalledWith('/symptoms', {
-      patient_id: 'P001',
-      symptom_description: 'watery eyes',
-    })
     expect(mocks.mockPost).toHaveBeenCalledWith('/chat', {
       messages: [{ role: 'user', content: 'hi' }],
     })

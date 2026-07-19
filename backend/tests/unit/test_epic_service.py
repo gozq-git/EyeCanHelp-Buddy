@@ -1,7 +1,7 @@
 import pytest
 
 from models.patient import Patient
-from services import epic_service
+from services.patient import service as patient_service
 
 pytestmark = pytest.mark.unit
 
@@ -49,9 +49,9 @@ async def test_get_patient_from_epic_returns_schema(monkeypatch):
         patient_dob="1952-08-12",
         phone_number="+6591234567",
     )
-    monkeypatch.setattr(epic_service, "AsyncSessionLocal", lambda: _FakeSessionCtx(patient))
+    monkeypatch.setattr(patient_service, "AsyncSessionLocal", lambda: _FakeSessionCtx(patient))
 
-    result = await epic_service.get_patient_from_epic("P001")
+    result = await patient_service.get_patient_from_epic("P001")
 
     assert result is not None
     assert result.patient_id == "P001"
@@ -60,9 +60,9 @@ async def test_get_patient_from_epic_returns_schema(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_get_patient_from_epic_not_found(monkeypatch):
-    monkeypatch.setattr(epic_service, "AsyncSessionLocal", lambda: _FakeSessionCtx(None))
+    monkeypatch.setattr(patient_service, "AsyncSessionLocal", lambda: _FakeSessionCtx(None))
 
-    result = await epic_service.get_patient_from_epic("UNKNOWN")
+    result = await patient_service.get_patient_from_epic("UNKNOWN")
 
     assert result is None
 
@@ -84,9 +84,9 @@ async def test_get_patient_record_from_epic_returns_schema(monkeypatch):
         "record_pregnant": False,
     }
     fake_db = {"TBL_PATIENT_RECORDS": _FakeCollection(fake_doc)}
-    monkeypatch.setattr(epic_service, "get_mongo_db", lambda: fake_db)
+    monkeypatch.setattr(patient_service, "get_mongo_db", lambda: fake_db)
 
-    result = await epic_service.get_patient_record_from_epic("P001")
+    result = await patient_service.get_patient_record_from_epic("P001")
 
     assert result is not None
     assert result.record_id == "REC-P001-001"
@@ -96,8 +96,8 @@ async def test_get_patient_record_from_epic_returns_schema(monkeypatch):
 @pytest.mark.asyncio
 async def test_get_patient_record_from_epic_not_found(monkeypatch):
     fake_db = {"TBL_PATIENT_RECORDS": _FakeCollection(None)}
-    monkeypatch.setattr(epic_service, "get_mongo_db", lambda: fake_db)
+    monkeypatch.setattr(patient_service, "get_mongo_db", lambda: fake_db)
 
-    result = await epic_service.get_patient_record_from_epic("UNKNOWN")
+    result = await patient_service.get_patient_record_from_epic("UNKNOWN")
 
     assert result is None

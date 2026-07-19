@@ -57,7 +57,7 @@ export default function FinancialCounsellingDoc({ formData = {} }) {
   const isRight = site === 'OD'
   const isBoth = site === 'OU'
 
-  // Must mirror PostOpChecklistDoc exactly so the two forms tally.
+  // Must mirror PostIvtAdviceDoc exactly so the two forms tally.
   // Use || (not destructuring default) so an empty-string medication still falls through.
   const medication = formData.medication || 'Faricimab (Vabysmo)'
   const classCode = (formData.classCode || '').toUpperCase()
