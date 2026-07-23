@@ -521,13 +521,13 @@ export default function ChatWindow({ onBack }) {
         return
       }
       setFormAnswers(prev => ({ ...prev, record_performer: isDoctor ? 'Doctor' : 'Nurse' }))
-      addMsg({ role: 'bot', type: 'text', content: 'May I confirm your IVT treatment is for right eye or left eye?' })
+      addMsg({ role: 'bot', type: 'text', content: 'May I confirm your IVT treatment is for right eye or left eye?\n• Right / Left' })
       setPreProcStep('q_eye')
     } else if (preProcStep === 'q_eye') {
       const isRight = lower.includes('right') || lower.includes('od')
       const isLeft = lower.includes('left') || lower.includes('os')
       if (!isRight && !isLeft) {
-        addMsg({ role: 'bot', type: 'text', content: 'Sorry, I didn\'t understand that. Please answer Right or Left.\n\nMay I confirm your IVT treatment is for right eye or left eye?' })
+        addMsg({ role: 'bot', type: 'text', content: 'Sorry, I didn\'t understand that. Please answer Right or Left.\n\nMay I confirm your IVT treatment is for right eye or left eye?\n• Right / Left' })
         return
       }
       const eyes = isLeft ? 'OS' : 'OD'
