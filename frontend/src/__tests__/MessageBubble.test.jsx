@@ -92,60 +92,61 @@ describe('MessageBubble — singpass type', () => {
 })
 
 describe('MessageBubble — appointment_picker type', () => {
-  it('renders date/time fields and disabled confirm button initially', () => {
+  it('renders weekday and period fields with disabled confirm button initially', () => {
     render(<MessageBubble role="bot" type="appointment_picker" content="" onAppointmentSubmit={() => {}} />)
-    expect(screen.getByLabelText('Preferred date')).toBeInTheDocument()
-    expect(screen.getByLabelText('Preferred time')).toBeInTheDocument()
+    expect(screen.getByLabelText('Preferred day')).toBeInTheDocument()
+    expect(screen.getByLabelText('Preferred period')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Confirm appointment slot' })).toBeDisabled()
   })
 
-  it('shows a time selection box with only 8:00-17:30 in 10-minute slots', () => {
+  it('shows only Monday to Friday day options', () => {
     render(<MessageBubble role="bot" type="appointment_picker" content="" onAppointmentSubmit={() => {}} />)
-    const timeSelect = screen.getByLabelText('Preferred time')
-    expect(timeSelect).toBeInTheDocument()
-    expect(screen.getByRole('option', { name: '08:00' })).toBeInTheDocument()
-    expect(screen.getByRole('option', { name: '17:30' })).toBeInTheDocument()
-    expect(screen.queryByRole('option', { name: '07:50' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('option', { name: '09:35' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('option', { name: '17:40' })).not.toBeInTheDocument()
+    const daySelect = screen.getByLabelText('Preferred day')
+    expect(daySelect).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Monday' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Tuesday' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Wednesday' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Thursday' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Friday' })).toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: 'Saturday' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: 'Sunday' })).not.toBeInTheDocument()
   })
 
-  it('calls onAppointmentSubmit after date and time are selected', async () => {
+  it('calls onAppointmentSubmit after day and period are selected', async () => {
     const onAppointmentSubmit = vi.fn()
     render(<MessageBubble role="bot" type="appointment_picker" content="" onAppointmentSubmit={onAppointmentSubmit} />)
 
-    fireEvent.change(screen.getByLabelText('Preferred date'), { target: { value: '2026-08-03' } })
-    fireEvent.change(screen.getByLabelText('Preferred time'), { target: { value: '09:30' } })
+    fireEvent.change(screen.getByLabelText('Preferred day'), { target: { value: 'Monday' } })
+    fireEvent.change(screen.getByLabelText('Preferred period'), { target: { value: 'AM' } })
 
     const confirmButton = screen.getByRole('button', { name: 'Confirm appointment slot' })
     expect(confirmButton).not.toBeDisabled()
     await userEvent.click(confirmButton)
 
-    expect(onAppointmentSubmit).toHaveBeenCalledWith({ date: '2026-08-03', time: '09:30' })
+    expect(onAppointmentSubmit).toHaveBeenCalledWith({ day: 'Monday', period: 'AM' })
   })
 
-  it('disables weekend dates directly in the calendar', async () => {
-    const { container } = render(<MessageBubble role="bot" type="appointment_picker" content="" onAppointmentSubmit={() => {}} />)
+  it('shows only AM and PM for period selection', () => {
+    render(<MessageBubble role="bot" type="appointment_picker" content="" onAppointmentSubmit={() => {}} />)
 
-    await userEvent.click(screen.getByLabelText('Preferred date'))
-
-    const disabledWeekendDay = container.querySelector('.react-datepicker__day--weekend.react-datepicker__day--disabled')
-    expect(disabledWeekendDay).not.toBeNull()
+    expect(screen.getByRole('option', { name: 'AM' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'PM' })).toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: '08:00' })).not.toBeInTheDocument()
   })
 
-  it('keeps confirm disabled until a valid slot is selected', async () => {
+  it('keeps confirm disabled until both day and period are selected', async () => {
     const onAppointmentSubmit = vi.fn()
     render(<MessageBubble role="bot" type="appointment_picker" content="" onAppointmentSubmit={onAppointmentSubmit} />)
 
-    fireEvent.change(screen.getByLabelText('Preferred date'), { target: { value: '2026-08-03' } })
+    fireEvent.change(screen.getByLabelText('Preferred day'), { target: { value: 'Friday' } })
 
     const confirmButton = screen.getByRole('button', { name: 'Confirm appointment slot' })
     expect(confirmButton).toBeDisabled()
-    fireEvent.change(screen.getByLabelText('Preferred time'), { target: { value: '09:40' } })
+    fireEvent.change(screen.getByLabelText('Preferred period'), { target: { value: 'PM' } })
     expect(confirmButton).not.toBeDisabled()
     await userEvent.click(confirmButton)
 
-    expect(onAppointmentSubmit).toHaveBeenCalledWith({ date: '2026-08-03', time: '09:40' })
+    expect(onAppointmentSubmit).toHaveBeenCalledWith({ day: 'Friday', period: 'PM' })
   })
 })
 

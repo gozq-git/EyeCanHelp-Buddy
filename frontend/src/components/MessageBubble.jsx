@@ -1,8 +1,6 @@
 import React from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import DatePicker from 'react-datepicker'
-import 'react-datepicker/dist/react-datepicker.css'
 import EyeLogoSVG from './EyeLogoSVG'
 import SingpassLoginButton from './SingpassLoginButton'
 import FinancialCounsellingDoc from './FinancialCounsellingDoc'
@@ -70,72 +68,52 @@ function AppointmentPickerContent({ onAppointmentSubmit }) {
     background: '#fff',
   }
 
-  const toIsoDate = (dateValue) => {
-    if (!(dateValue instanceof Date)) return ''
-    const year = dateValue.getFullYear()
-    const month = String(dateValue.getMonth() + 1).padStart(2, '0')
-    const day = String(dateValue.getDate()).padStart(2, '0')
-    return `${year}-${month}-${day}`
-  }
+  const weekdayOptions = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
+  const [day, setDay] = React.useState('')
+  const [period, setPeriod] = React.useState('')
 
-  const timeSlots = React.useMemo(() => {
-    const slots = []
-    for (let mins = 8 * 60; mins <= 17 * 60 + 30; mins += 10) {
-      const hh = String(Math.floor(mins / 60)).padStart(2, '0')
-      const mm = String(mins % 60).padStart(2, '0')
-      slots.push(`${hh}:${mm}`)
-    }
-    return slots
-  }, [])
-
-  const [date, setDate] = React.useState(null)
-  const [time, setTime] = React.useState('')
-
-  const canSubmit = date && time
+  const canSubmit = day && period
 
   return (
     <div style={{ background: '#F0F0F0', borderRadius: '4px 20px 20px 20px', padding: '12px 14px', maxWidth: '420px' }}>
       <p style={{ margin: '0 0 10px', fontSize: '14px', color: '#222' }}>
-        Please select your preferred date and time.
+        Please select your preferred day and period.
       </p>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-        <label htmlFor="preferred-date" style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '13px', color: '#444' }}>
-          Preferred date
-          <DatePicker
-            id="preferred-date"
-            aria-label="Preferred date"
-            selected={date}
-            onChange={(value) => setDate(value)}
-            filterDate={(value) => value.getDay() !== 0 && value.getDay() !== 6}
-            dateFormat="yyyy-MM-dd"
-            placeholderText="YYYY-MM-DD"
-            autoComplete="off"
-            customInput={<input style={controlStyle} />}
-          />
-        </label>
         <label style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '13px', color: '#444' }}>
-          Preferred time
+          Preferred day
           <select
-            aria-label="Preferred time"
-            value={time}
-            onChange={(e) => setTime(e.target.value)}
+            aria-label="Preferred day"
+            value={day}
+            onChange={(e) => setDay(e.target.value)}
             style={controlStyle}
           >
-            <option value="">Select a time slot</option>
-            {timeSlots.map(slot => (
-              <option key={slot} value={slot}>{slot}</option>
+            <option value="">Select a weekday</option>
+            {weekdayOptions.map((weekday) => (
+              <option key={weekday} value={weekday}>{weekday}</option>
             ))}
           </select>
         </label>
+        <label style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '13px', color: '#444' }}>
+          Preferred period
+          <select
+            aria-label="Preferred period"
+            value={period}
+            onChange={(e) => setPeriod(e.target.value)}
+            style={controlStyle}
+          >
+            <option value="">Select AM or PM</option>
+            <option value="AM">AM</option>
+            <option value="PM">PM</option>
+          </select>
+        </label>
         <p style={{ margin: 0, fontSize: '12px', color: '#666' }}>
-          Operating hours
-          <br /> 
-          Mondays to Fridays: 08:00 to 17:30
+          Appointment bookings are available from Monday to Friday.
         </p>
         <button
           type="button"
           disabled={!canSubmit}
-          onClick={() => onAppointmentSubmit?.({ date: toIsoDate(date), time })}
+          onClick={() => onAppointmentSubmit?.({ day, period })}
           style={{
             marginTop: '2px',
             border: 'none',

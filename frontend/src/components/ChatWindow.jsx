@@ -173,7 +173,7 @@ export default function ChatWindow({ onBack }) {
       addMsg({ role: 'bot', type: 'singpass', content: '' })
     } else if (APPOINTMENT_LABELS.includes(label)) {
       setMode('appointment')
-      addMsg({ role: 'bot', type: 'text', content: 'Please share your preferred appointment date and time using the calendar below.' })
+      addMsg({ role: 'bot', type: 'text', content: 'Please share your preferred appointment day (Monday to Friday) and period (AM or PM).' })
       addMsg({ role: 'bot', type: 'appointment_picker', content: '' })
     } else if (label === 'Return Menu') {
       setMode('welcome')
@@ -190,20 +190,10 @@ export default function ChatWindow({ onBack }) {
     }
   }
 
-  const handleAppointmentSubmit = ({ date, time }) => {
-    if (!date || !time) return
+  const handleAppointmentSubmit = ({ day, period }) => {
+    if (!day || !period) return
 
-    const dateObj = new Date(`${date}T${time}`)
-    const formatted = Number.isNaN(dateObj.getTime())
-      ? `${date} ${time}`
-      : dateObj.toLocaleString('en-GB', {
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false,
-      })
+    const formatted = `${day} ${period}`
 
     addMsg({ role: 'user', type: 'text', content: `Preferred appointment slot: ${formatted}` })
     addMsg({ role: 'bot', type: 'text', content: `Thanks. Your preferred slot (${formatted}) has been received. Our clinic staff will contact you to confirm availability.` })
@@ -510,7 +500,7 @@ export default function ChatWindow({ onBack }) {
         }
         return
       }
-      addMsg({ role: 'bot', type: 'text', content: 'Are you seeking treatment under Private or Subsidised scheme?\n• Private / Subsidised' })
+      addMsg({ role: 'bot', type: 'text', content: 'Are you under Private or Subsidised scheme?\n• Private / Subsidised' })
       setPreProcStep('q_scheme')
     } else if (preProcStep === 'q_scheme') {
       const isPrivate = lower.includes('private')
@@ -521,7 +511,7 @@ export default function ChatWindow({ onBack }) {
       }
       const recordClass = isPrivate ? 'PTE' : 'SUB'
       setFormAnswers(prev => ({ ...prev, record_class: recordClass }))
-      addMsg({ role: 'bot', type: 'text', content: 'Would you like your procedure to be performed by Doctor or Nurse?\n• Doctor / Nurse' })
+      addMsg({ role: 'bot', type: 'text', content: 'Is your procedure to be performed by Doctor or Nurse?\n• Doctor / Nurse' })
       setPreProcStep('q_performer')
     } else if (preProcStep === 'q_performer') {
       const isDoctor = lower.includes('doctor')
@@ -531,18 +521,17 @@ export default function ChatWindow({ onBack }) {
         return
       }
       setFormAnswers(prev => ({ ...prev, record_performer: isDoctor ? 'Doctor' : 'Nurse' }))
-      addMsg({ role: 'bot', type: 'text', content: 'May I confirm your IVT treatment is for right eye, left eye or both?' })
+      addMsg({ role: 'bot', type: 'text', content: 'May I confirm your IVT treatment is for right eye or left eye?' })
       setPreProcStep('q_eye')
     } else if (preProcStep === 'q_eye') {
       const isRight = lower.includes('right') || lower.includes('od')
       const isLeft = lower.includes('left') || lower.includes('os')
-      const isBoth = lower.includes('both') || lower.includes('bilat') || lower.includes('ou')
-      if (!isRight && !isLeft && !isBoth) {
-        addMsg({ role: 'bot', type: 'text', content: 'Sorry, I didn\'t understand that. Please answer Right, Left, or Both.\n\nMay I confirm your IVT treatment is for right eye, left eye or both?' })
+      if (!isRight && !isLeft) {
+        addMsg({ role: 'bot', type: 'text', content: 'Sorry, I didn\'t understand that. Please answer Right or Left.\n\nMay I confirm your IVT treatment is for right eye or left eye?' })
         return
       }
-      const eyes = isBoth ? 'OU' : isLeft ? 'OS' : 'OD'
-      const injections = isBoth ? 2 : 1
+      const eyes = isLeft ? 'OS' : 'OD'
+      const injections = 1
       const fallbackRange = getFallbackRange(formAnswers.record_class, formAnswers.record_performer, injections)
       let updated = {
         ...formAnswers,
@@ -843,7 +832,6 @@ export default function ChatWindow({ onBack }) {
               <>
                 <button onClick={() => handlePreProcAnswer('Right')} style={chipBtn}>Right</button>
                 <button onClick={() => handlePreProcAnswer('Left')} style={chipBtn}>Left</button>
-                <button onClick={() => handlePreProcAnswer('Both')} style={chipBtn}>Both</button>
               </>
             )}
             {showPaymentMode && (

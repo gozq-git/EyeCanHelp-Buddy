@@ -245,13 +245,13 @@ describe('ChatWindow — Pre-Procedure flow', () => {
     await userEvent.click(screen.getByRole('button', { name: 'No' }))  // q_pregnant
     expect(screen.getByText(/Would you like to proceed with financial counselling now/i)).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Yes' })) // q_financial_counselling
-    expect(screen.getByText(/Are you seeking treatment under Private or Subsidised scheme/i)).toBeInTheDocument()
+    expect(screen.getByText(/Are you under Private or Subsidised scheme/i)).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Private' })) // q_scheme
-    expect(screen.getByText(/Would you like your procedure to be performed by Doctor or Nurse/i)).toBeInTheDocument()
+    expect(screen.getByText(/Is your procedure to be performed by Doctor or Nurse/i)).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Doctor' })) // q_performer
     expect(screen.getByRole('button', { name: 'Right' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Left' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Both' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Both' })).not.toBeInTheDocument()
   })
 
   it('maps the four acknowledgement-form answers onto the patient record', async () => {
@@ -321,27 +321,6 @@ describe('ChatWindow — Pre-Procedure flow', () => {
     expect(payload.patient_record.record_number_of_injections).toBe(1)
   })
 
-  it('record_eyes is OU when user selects Both', async () => {
-    render(<ChatWindow />)
-    await userEvent.click(screen.getByRole('button', { name: 'Fill up IVT Pre-Procedure Acknowledgement Form' }))
-    await userEvent.click(screen.getByRole('button', { name: /singpass login/i }))
-    await userEvent.click(screen.getByRole('button', { name: 'Yes' }))   // ask_update
-    await userEvent.click(screen.getByRole('button', { name: 'No' }))    // q_stroke
-    await userEvent.click(screen.getByRole('button', { name: 'No' }))    // q_admission
-    await userEvent.click(screen.getByRole('button', { name: 'No' }))    // q_antibiotics
-    await userEvent.click(screen.getByRole('button', { name: 'No' }))    // q_pregnant
-    await userEvent.click(screen.getByRole('button', { name: 'Yes' }))   // q_financial_counselling
-    await userEvent.click(screen.getByRole('button', { name: 'Private' })) // q_scheme
-    await userEvent.click(screen.getByRole('button', { name: 'Doctor' })) // q_performer
-    await userEvent.click(screen.getByRole('button', { name: 'Both' }))  // q_eye
-    await userEvent.click(screen.getByRole('button', { name: 'Yes' }))   // cost_confirm
-    await userEvent.click(screen.getByRole('button', { name: 'Medisave (Self)' })) // payment_mode → submit
-    await waitFor(() => expect(submitAcknowledgement).toHaveBeenCalledOnce())
-    const [payload] = submitAcknowledgement.mock.calls[0]
-    expect(payload.patient_record.record_eyes).toBe('OU')
-    expect(payload.patient_record.record_number_of_injections).toBe(2)
-  })
-
   it('renders the acknowledgement doc with the four questions after submission', async () => {
     render(<ChatWindow />)
     await userEvent.click(screen.getByRole('button', { name: 'Fill up IVT Pre-Procedure Acknowledgement Form' }))
@@ -378,13 +357,13 @@ describe('ChatWindow — Pre-Procedure flow', () => {
     expect(await screen.findByText(/Circle as appropriate/i)).toBeInTheDocument()
     expect(screen.getByText(/Would you like to proceed with financial counselling now/i)).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Yes' }))
-    expect(screen.getByText(/Are you seeking treatment under Private or Subsidised scheme/i)).toBeInTheDocument()
+    expect(screen.getByText(/Are you under Private or Subsidised scheme/i)).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Private' }))
-    expect(screen.getByText(/Would you like your procedure to be performed by Doctor or Nurse/i)).toBeInTheDocument()
+    expect(screen.getByText(/Is your procedure to be performed by Doctor or Nurse/i)).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Doctor' }))
     expect(screen.getByRole('button', { name: 'Right' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Left' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Both' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Both' })).not.toBeInTheDocument()
   })
 
   it('saves the acknowledgement and shows the doc even when the cost is declined', async () => {
@@ -563,16 +542,16 @@ describe('ChatWindow — Pre-Procedure input validation', () => {
     await userEvent.type(screen.getByRole('textbox'), 'dunno')
     await userEvent.keyboard('{Enter}')
     expect(screen.getByText(/Sorry, I didn't understand that/i)).toBeInTheDocument()
-    expect(screen.getByText(/Please answer Right, Left, or Both/i)).toBeInTheDocument()
+    expect(screen.getByText(/Please answer Right or Left/i)).toBeInTheDocument()
   })
 
-  it('stays on q_eye step after invalid answer (Right/Left/Both chips still shown)', async () => {
+  it('stays on q_eye step after invalid answer (Right/Left chips still shown)', async () => {
     await reachStep('q_eye')
     await userEvent.type(screen.getByRole('textbox'), 'dunno')
     await userEvent.keyboard('{Enter}')
     expect(screen.getByRole('button', { name: 'Right' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Left' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Both' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Both' })).not.toBeInTheDocument()
   })
 
   it('proceeds after a valid typed answer following an invalid one (q_eye)', async () => {
@@ -671,24 +650,24 @@ describe('ChatWindow — Return Menu', () => {
     expect(screen.getAllByRole('button', { name: 'General Enquiry' }).length).toBeGreaterThanOrEqual(2)
   })
 
-  it('clicking Appointment from the main menu shows date/time calendar inputs', async () => {
+  it('clicking Appointment from the main menu shows weekday and period inputs', async () => {
     render(<ChatWindow />)
     // Appointment lives only in the main welcome menu, not the completion bar.
     await userEvent.click(screen.getByRole('button', { name: 'Book Appointment' }))
-    expect(screen.getByText(/preferred appointment date and time/i)).toBeInTheDocument()
-    expect(screen.getByLabelText('Preferred date')).toBeInTheDocument()
-    expect(screen.getByLabelText('Preferred time')).toBeInTheDocument()
+    expect(screen.getByText(/preferred appointment day/i)).toBeInTheDocument()
+    expect(screen.getByLabelText('Preferred day')).toBeInTheDocument()
+    expect(screen.getByLabelText('Preferred period')).toBeInTheDocument()
   })
 
-  it('submitting appointment date/time posts confirmation in chat', async () => {
+  it('submitting appointment day/period posts confirmation in chat', async () => {
     render(<ChatWindow />)
     await userEvent.click(screen.getByRole('button', { name: 'Book Appointment' }))
 
-    fireEvent.change(screen.getByLabelText('Preferred date'), { target: { value: '2026-08-03' } })
-    fireEvent.change(screen.getByLabelText('Preferred time'), { target: { value: '09:30' } })
+    fireEvent.change(screen.getByLabelText('Preferred day'), { target: { value: 'Monday' } })
+    fireEvent.change(screen.getByLabelText('Preferred period'), { target: { value: 'AM' } })
     await userEvent.click(screen.getByRole('button', { name: 'Confirm appointment slot' }))
 
-    expect(screen.getByText(/Preferred appointment slot/i)).toBeInTheDocument()
+    expect(screen.getByText(/Preferred appointment slot: Monday AM/i)).toBeInTheDocument()
     expect(screen.getByText(/has been received/i)).toBeInTheDocument()
   })
 
