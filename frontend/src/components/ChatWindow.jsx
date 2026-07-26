@@ -124,6 +124,7 @@ export default function ChatWindow({ onBack }) {
   const bottomRef = useRef(null)
   const topRef = useRef(null)
   const streamAbortRef = useRef(null)
+  const generalEnquirySessionIdRef = useRef(`ge-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`)
 
   const scrollToTop = () => topRef.current?.scrollIntoView({ behavior: 'smooth' })
 
@@ -685,6 +686,8 @@ export default function ChatWindow({ onBack }) {
     try {
       let receivedStreamChunk = false
       const streamedText = await sendChatMessageStream(history, {
+        sessionId: generalEnquirySessionIdRef.current,
+        mode: 'general_enquiry',
         signal: controller.signal,
         onChunk: (chunk) => {
           if (!receivedStreamChunk) {
@@ -716,7 +719,10 @@ export default function ChatWindow({ onBack }) {
       setShowThinkingBubble(false)
 
       try {
-        const res = await sendChatMessage(history)
+        const res = await sendChatMessage(history, {
+          sessionId: generalEnquirySessionIdRef.current,
+          mode: 'general_enquiry',
+        })
         if (placeholderId !== null) {
           updateMsg(placeholderId, { content: res.data.reply })
         } else {

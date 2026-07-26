@@ -54,6 +54,8 @@ class ChatMessage(BaseModel):
 
 class ChatRequest(BaseModel):
     messages: list[ChatMessage]
+    session_id: str | None = None
+    mode: str | None = None
 
 
 class ChatResponse(BaseModel):
