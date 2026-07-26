@@ -1,9 +1,15 @@
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import DateTime, Float, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from database.postgres import Base
+
+
+def _sgt_now_naive() -> datetime:
+	# Store Singapore wall-clock time in a TIMESTAMP column.
+	sgt = timezone(timedelta(hours=8))
+	return datetime.now(sgt).replace(tzinfo=None)
 
 
 class Payment(Base):
@@ -25,7 +31,7 @@ class ChatExchangeLog(Base):
 	mode: Mapped[str] = mapped_column(String(50), nullable=False)
 	user_message: Mapped[str] = mapped_column(Text, nullable=False)
 	system_response: Mapped[str] = mapped_column(Text, nullable=False)
-	created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+	created_at: Mapped[datetime] = mapped_column(DateTime, default=_sgt_now_naive, nullable=False)
 
 
 __all__ = ["Payment", "ChatExchangeLog"]
