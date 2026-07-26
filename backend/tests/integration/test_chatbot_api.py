@@ -2,6 +2,9 @@
 import asyncio
 
 import pytest
+from sqlalchemy import select
+
+from services.chatbot.model import ChatExchangeLog
 
 pytestmark = pytest.mark.integration
 
@@ -21,6 +24,63 @@ def test_chat_returns_mocked_reply(client, monkeypatch):
     )
     assert resp.status_code == 200
     assert resp.json() == {"reply": "A cataract is a clouding of the eye's lens."}
+
+
+def test_chat_logs_general_enquiry_exchange_with_session_id(client, monkeypatch, sqlite_sessionmaker):
+    async def fake_chat(messages):
+        return "A cataract is a clouding of the eye's lens."
+
+    monkeypatch.setattr("services.chatbot.router.chat", fake_chat)
+
+    resp = client.post(
+        "/api/chat",
+        json={
+            "messages": [{"role": "user", "content": "What is a cataract?"}],
+            "mode": "general_enquiry",
+            "session_id": "sess-general-001",
+        },
+    )
+    assert resp.status_code == 200
+
+    async def _fetch_logs():
+        async with sqlite_sessionmaker() as session:
+            result = await session.execute(
+                select(ChatExchangeLog).where(ChatExchangeLog.session_id == "sess-general-001")
+            )
+            return result.scalars().all()
+
+    logs = asyncio.run(_fetch_logs())
+    assert len(logs) == 1
+    assert logs[0].mode == "general_enquiry"
+    assert logs[0].user_message == "What is a cataract?"
+    assert logs[0].system_response == "A cataract is a clouding of the eye's lens."
+
+
+def test_chat_does_not_log_non_general_mode(client, monkeypatch, sqlite_sessionmaker):
+    async def fake_chat(messages):
+        return "ok"
+
+    monkeypatch.setattr("services.chatbot.router.chat", fake_chat)
+
+    resp = client.post(
+        "/api/chat",
+        json={
+            "messages": [{"role": "user", "content": "What is a cataract?"}],
+            "mode": "post_operation",
+            "session_id": "sess-postop-001",
+        },
+    )
+    assert resp.status_code == 200
+
+    async def _fetch_logs():
+        async with sqlite_sessionmaker() as session:
+            result = await session.execute(
+                select(ChatExchangeLog).where(ChatExchangeLog.session_id == "sess-postop-001")
+            )
+            return result.scalars().all()
+
+    logs = asyncio.run(_fetch_logs())
+    assert logs == []
 
 
 def test_chat_rejects_malformed_body(client):

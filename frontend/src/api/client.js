@@ -14,8 +14,14 @@ export const getEpicRecord = (patientId) =>
 export const submitAcknowledgement = (data) =>
   api.post('/acknowledgement', data)
 
-export const sendChatMessage = (messages) =>
-  api.post('/chat', { messages })
+export const sendChatMessage = (messages, options = {}) => {
+  const payload = {
+    messages,
+    ...(options.sessionId ? { session_id: options.sessionId } : {}),
+    ...(options.mode ? { mode: options.mode } : {}),
+  }
+  return api.post('/chat', payload)
+}
 
 const parseSseFrame = (frame) => {
   const normalized = frame.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
@@ -48,14 +54,19 @@ const frameSeparatorLength = (buffer, boundary) =>
   buffer.startsWith('\r\n\r\n', boundary) ? 4 : 2
 
 export const sendChatMessageStream = async (messages, options = {}) => {
-  const { onChunk, onHeartbeat, signal } = options
+  const { onChunk, onHeartbeat, signal, sessionId, mode } = options
+  const payload = {
+    messages,
+    ...(sessionId ? { session_id: sessionId } : {}),
+    ...(mode ? { mode } : {}),
+  }
   const response = await fetch('/api/chat?stream=true', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Accept: 'text/event-stream',
     },
-    body: JSON.stringify({ messages }),
+    body: JSON.stringify(payload),
     signal,
   })
 
