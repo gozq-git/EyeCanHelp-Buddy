@@ -49,7 +49,7 @@ CREATE TABLE IF NOT EXISTS "TBL_CHAT_EXCHANGE_LOG" (
     mode            VARCHAR(50)      NOT NULL,
     user_message    TEXT             NOT NULL,
     system_response TEXT             NOT NULL,
-    created_at      TIMESTAMP        NOT NULL DEFAULT NOW()
+    created_at      TIMESTAMP        NOT NULL DEFAULT (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Singapore')
 );
 
 CREATE INDEX IF NOT EXISTS idx_tbl_chat_exchange_log_session
