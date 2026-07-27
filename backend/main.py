@@ -1,7 +1,8 @@
-from contextlib import asynccontextmanager
 import os
-from fastapi import FastAPI
+from contextlib import asynccontextmanager
+
 from dotenv import load_dotenv
+from fastapi import FastAPI
 
 load_dotenv()
 
@@ -16,20 +17,20 @@ from services.patient.router import epic_router, patient_router
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(_app: FastAPI):
     skip_db_init = os.getenv("SKIP_DB_INIT", "0").strip().lower() in {"1", "true", "yes", "on"}
     if skip_db_init:
         print("[INFO] SKIP_DB_INIT enabled; skipping PostgreSQL initialization")
     else:
         try:
             await init_db()
-        except Exception as e:
-            print(f"[ERROR] PostgreSQL init failed; app startup aborted: {e}")
+        except Exception as exc:
+            print(f"[ERROR] PostgreSQL init failed; app startup aborted: {exc}")
             raise
     try:
         await init_mongo()
-    except Exception as e:
-        print(f"[WARNING] MongoDB unavailable, skipping Mongo seed: {e}")
+    except Exception as exc:
+        print(f"[WARNING] MongoDB unavailable, skipping Mongo seed: {exc}")
     yield
     close_mongo_client()
 

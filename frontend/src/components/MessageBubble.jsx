@@ -108,7 +108,9 @@ function AppointmentPickerContent({ onAppointmentSubmit }) {
           </select>
         </label>
         <p style={{ margin: 0, fontSize: '12px', color: '#666' }}>
-          Appointment bookings are available from Monday to Friday.
+          TTSH Eye Clinic Operation Hours:
+          <br />
+          Monday to Friday: 8:00 AM - 5:30 PM
         </p>
         <button
           type="button"

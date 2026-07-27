@@ -9,7 +9,7 @@ const nextId = () => ++_msgId
 const INIT_FORM = { last3mths_admission: false, stroke_heartAtt_last6mths: false, taking_antibiotics: false, pregnant: false, record_eyes: 'OD', record_number_of_injections: 1, record_class: '', record_performer: 'Nurse', estimated_cost: null, estimated_cost_min: null, estimated_cost_max: null, estimated_cost_range: '', max_medisave_claimable: null, payment_mode: 'Medisave (Self)' }
 const INIT_MESSAGES = [{ id: 1, role: 'bot', type: 'welcome', content: '' }]
 
-const PREPROC_LABELS = ['Fill up IVT Pre-Procedure Acknowledgement Form', 'Fill up IVT Pre-Procedure Acknowledgement Form', 'Fill up pre-procedure']
+const PREPROC_LABELS = ['Fill up IVT Pre-Procedure Acknowledgement Form', 'Fill up pre-procedure']
 const POSTOP_LABELS = ['View Post-IVT Advice Form', 'Fill up post-operation checklist']
 const APPOINTMENT_LABELS = ['Book Appointment', 'Appointment']
 
