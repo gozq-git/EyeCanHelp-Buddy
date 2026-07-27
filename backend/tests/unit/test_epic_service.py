@@ -1,4 +1,5 @@
 import pytest
+import uuid
 
 from services.patient.model import Patient
 from services.patient import service as patient_service
@@ -43,18 +44,19 @@ class _FakeCollection:
 
 @pytest.mark.asyncio
 async def test_get_patient_from_epic_returns_schema(monkeypatch):
+    patient_id = uuid.UUID("a25d9f8b-76b8-4f2a-8e2c-43fd5eb15a6c")
     patient = Patient(
-        patient_id="P001",
+        patient_id=patient_id,
         patient_name="Tan Ah Kow",
         patient_dob="1952-08-12",
         phone_number="+6591234567",
     )
     monkeypatch.setattr(patient_service, "AsyncSessionLocal", lambda: _FakeSessionCtx(patient))
 
-    result = await patient_service.get_patient_from_epic("P001")
+    result = await patient_service.get_patient_from_epic(str(patient_id))
 
     assert result is not None
-    assert result.patient_id == "P001"
+    assert str(result.patient_id) == str(patient_id)
     assert result.patient_name == "Tan Ah Kow"
 
 

@@ -18,6 +18,7 @@ if str(BACKEND_DIR) not in sys.path:
 
 import pytest
 import pytest_asyncio
+from sqlalchemy import JSON, text
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 
 
@@ -36,12 +37,26 @@ async def sqlite_sessionmaker():
     # Importing main registers every model on Base.metadata.
     import main  # noqa: F401
 
+    # SQLite cannot compile PostgreSQL-specific server defaults like
+    # `gen_random_uuid()`. Remove these defaults for test-only in-memory DDL.
+    for table in Base.metadata.tables.values():
+        for column in table.columns:
+            if column.server_default is not None and "gen_random_uuid" in str(column.server_default.arg):
+                column.server_default = None
+            if column.type.__class__.__name__ == "JSONB":
+                column.type = JSON()
+
     engine = create_async_engine(
         "sqlite+aiosqlite://",
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
     async with engine.begin() as conn:
+        # SQLite has no schemas; attach logical databases so schema-qualified
+        # table names (patient/chatbot/billing) can still be created in tests.
+        await conn.execute(text("ATTACH DATABASE ':memory:' AS patient"))
+        await conn.execute(text("ATTACH DATABASE ':memory:' AS chatbot"))
+        await conn.execute(text("ATTACH DATABASE ':memory:' AS billing"))
         await conn.run_sync(Base.metadata.create_all)
 
     maker = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)

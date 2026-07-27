@@ -15,6 +15,12 @@ pytestmark = pytest.mark.unit
 
 # ─────────────────────────── database/postgres.py ──────────────────────────────
 class _FakeConn:
+    def __init__(self):
+        self.executed = []
+
+    async def execute(self, statement):
+        self.executed.append(statement)
+
     async def run_sync(self, fn):
         return None
 
@@ -53,9 +59,14 @@ class _FakeSession:
     def begin(self):
         return _FakeTxn()
 
-    async def execute(self, statement):
-        self.executed.append(statement)
-        return None
+    async def execute(self, statement, params=None):
+        self.executed.append((statement, params))
+
+        class _FakeResult:
+            def scalar_one(self):
+                return 4
+
+        return _FakeResult()
 
 
 async def test_init_db_creates_tables_and_seeds(monkeypatch):
@@ -74,8 +85,8 @@ async def test_seed_db_inserts_all_seed_tables(monkeypatch):
     session = _FakeSession()
     monkeypatch.setattr(pg, "AsyncSessionLocal", lambda: session)
     await pg._seed_db()
-    # One insert per seed table: patients and ivts.
-    assert len(session.executed) == 2
+    # Seed flow executes 2 upserts, 4 billing inserts, and 1 count query.
+    assert len(session.executed) == 7
 
 
 async def test_get_db_yields_session(monkeypatch):

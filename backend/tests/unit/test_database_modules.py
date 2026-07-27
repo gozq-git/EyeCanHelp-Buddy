@@ -49,7 +49,11 @@ class _FakeBeginCtx:
 
 class _FakeConn:
     def __init__(self):
+        self.executed = []
         self.sync_calls = 0
+
+    async def execute(self, statement):
+        self.executed.append(statement)
 
     async def run_sync(self, _fn):
         self.sync_calls += 1
