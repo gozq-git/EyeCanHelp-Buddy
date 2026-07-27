@@ -1,4 +1,4 @@
-import { render, screen, waitFor, fireEvent } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import ChatWindow from '../components/ChatWindow'
@@ -189,16 +189,16 @@ describe('ChatWindow — Pre-Procedure flow', () => {
     // Existing patient: getPatient + getEpicRecord both resolve → flow enters ask_update
     getPatient.mockResolvedValue(MOCK_PATIENT_RESPONSE)
     getEpicRecord.mockResolvedValue(MOCK_EPIC_RECORD_RESPONSE)
-      calculateBill.mockResolvedValue({
-        data: {
-          record_class: 'PTE',
-          performer: 'Doctor',
-          injections: 1,
-          estimated_cost_min: 430,
-          estimated_cost_max: 480,
-          max_medisave_claimable: 250,
-        },
-      })
+    calculateBill.mockResolvedValue({
+      data: {
+        record_class: 'PTE',
+        performer: 'Doctor',
+        injections: 1,
+        estimated_cost_min: 430,
+        estimated_cost_max: 480,
+        max_medisave_claimable: 250,
+      },
+    })
     // No prior submission — getLatestAcknowledgement rejects so the post-op merge skips it
     getLatestAcknowledgement.mockRejectedValue(new Error('no record'))
   })
