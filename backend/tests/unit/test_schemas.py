@@ -26,7 +26,7 @@ def test_ivt_schema_rejects_missing_field():
 
 
 def test_patient_schema_defaults_resource_type():
-    p = PatientSchema(patient_id="P001", patient_name="Tan Ah Kow", patient_dob="1952-08-12")
+    p = PatientSchema(patient_id="a25d9f8b-76b8-4f2a-8e2c-43fd5eb15a6c", patient_name="Tan Ah Kow", patient_dob="1952-08-12")
     assert p.resourceType == "Patient"
     assert p.phone_number is None
 

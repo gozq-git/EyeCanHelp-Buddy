@@ -4,11 +4,11 @@ The `client` fixture overrides get_db with an in-memory SQLite session, so these
 exercise the real ORM round-trip (insert + select) without PostgreSQL.
 """
 import pytest
+import uuid
 
 pytestmark = pytest.mark.integration
 
 NEW_PATIENT = {
-    "patient_id": "P999",
     "patient_name": "New Patient",
     "patient_dob": "1970-01-01",
     "phone_number": "+6580000000",
@@ -18,18 +18,21 @@ NEW_PATIENT = {
 def test_create_then_get_patient(client):
     create = client.post("/api/patient", json=NEW_PATIENT)
     assert create.status_code == 200
-    assert create.json()["patient_id"] == "P999"
+    created_id = create.json()["patient_id"]
+    assert uuid.UUID(created_id)
 
-    fetched = client.get("/api/patient/P999")
+    fetched = client.get(f"/api/patient/{created_id}")
     assert fetched.status_code == 200
     assert fetched.json()["patient_name"] == "New Patient"
 
 
-def test_create_duplicate_patient_conflicts(client):
-    assert client.post("/api/patient", json=NEW_PATIENT).status_code == 200
-    dup = client.post("/api/patient", json=NEW_PATIENT)
-    assert dup.status_code == 409
-    assert "already exists" in dup.json()["detail"].lower()
+def test_create_multiple_patients_succeeds_with_distinct_ids(client):
+    first = client.post("/api/patient", json=NEW_PATIENT)
+    second = client.post("/api/patient", json=NEW_PATIENT)
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert first.json()["patient_id"] != second.json()["patient_id"]
 
 
 def test_get_unknown_patient_returns_404(client):
@@ -38,5 +41,5 @@ def test_get_unknown_patient_returns_404(client):
 
 
 def test_create_patient_validation_error(client):
-    resp = client.post("/api/patient", json={"patient_id": "P1"})  # missing required fields
+    resp = client.post("/api/patient", json={})  # missing required fields
     assert resp.status_code == 422

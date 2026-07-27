@@ -18,7 +18,11 @@ class _BeginCtx:
 
 class _FakeConn:
     def __init__(self):
+        self.execute_calls = []
         self.run_sync_calls = []
+
+    async def execute(self, statement):
+        self.execute_calls.append(statement)
 
     async def run_sync(self, fn):
         self.run_sync_calls.append(fn)
@@ -53,8 +57,14 @@ class _FakeSession:
     def begin(self):
         return _TxnCtx()
 
-    async def execute(self, stmt):
-        self.executed.append(stmt)
+    async def execute(self, stmt, params=None):
+        self.executed.append((stmt, params))
+
+        class _FakeResult:
+            def scalar_one(self):
+                return 4
+
+        return _FakeResult()
 
 
 @pytest.mark.asyncio
@@ -75,14 +85,14 @@ async def test_init_db_runs_create_all_and_seed(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_seed_db_executes_two_upsert_statements(monkeypatch):
+async def test_seed_db_executes_seed_statements(monkeypatch):
     executed = []
 
     monkeypatch.setattr(postgres, "AsyncSessionLocal", lambda: _FakeSession(executed))
 
     await postgres._seed_db()
 
-    assert len(executed) == 2
+    assert len(executed) == 7
 
 
 @pytest.mark.asyncio

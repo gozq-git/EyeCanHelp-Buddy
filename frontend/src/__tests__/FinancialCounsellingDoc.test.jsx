@@ -28,9 +28,9 @@ describe('FinancialCounsellingDoc', () => {
     expect(screen.getAllByText(/for 2 injection\(s\)/).length).toBeGreaterThanOrEqual(1)
   })
 
-  it('defaults to $123 for 1 injection', () => {
+  it('defaults to Not available for 1 injection when no estimate is provided', () => {
     render(<FinancialCounsellingDoc />)
-    expect(screen.getByText('$123')).toBeInTheDocument()
+    expect(screen.getAllByText('Not available').length).toBeGreaterThanOrEqual(2)
     expect(screen.getAllByText(/for 1 injection\(s\)/).length).toBeGreaterThanOrEqual(1)
   })
 

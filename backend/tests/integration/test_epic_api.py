@@ -4,6 +4,7 @@ The patient service facade is mocked so the route logic — including the 404
 paths — is verified without touching Postgres/Mongo.
 """
 import pytest
+import uuid
 
 from services.patient.schema import PatientSchema, PatientRecordResponse
 
@@ -11,15 +12,17 @@ pytestmark = pytest.mark.integration
 
 
 def test_get_patient_found(client, monkeypatch):
+    patient_id = uuid.UUID("a25d9f8b-76b8-4f2a-8e2c-43fd5eb15a6c")
+
     async def fake_get_patient(patient_id):
         return PatientSchema(patient_id=patient_id, patient_name="Tan Ah Kow", patient_dob="1952-08-12")
 
     monkeypatch.setattr("services.patient.router.get_patient_from_epic", fake_get_patient)
 
-    resp = client.get("/api/epic/patient/P001")
+    resp = client.get(f"/api/epic/patient/{patient_id}")
     assert resp.status_code == 200
     body = resp.json()
-    assert body["patient_id"] == "P001"
+    assert body["patient_id"] == str(patient_id)
     assert body["resourceType"] == "Patient"
 
 
