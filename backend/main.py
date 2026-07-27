@@ -13,6 +13,7 @@ import services.chatbot.model  # noqa: F401 — registers chatbot SQLAlchemy met
 import services.billing.model  # noqa: F401 — registers billing SQLAlchemy metadata
 from services.billing.router import router as billing_router
 from services.chatbot.router import acknowledgement_router, chat_router
+from services.notifications.router import router as notifications_router
 from services.patient.router import epic_router, patient_router
 
 
@@ -42,6 +43,7 @@ app.include_router(acknowledgement_router, prefix="/api")
 app.include_router(chat_router, prefix="/api")
 app.include_router(patient_router, prefix="/api")
 app.include_router(billing_router, prefix="/api")
+app.include_router(notifications_router, prefix="/api")
 
 
 @app.get("/")
