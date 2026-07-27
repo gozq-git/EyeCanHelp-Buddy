@@ -105,8 +105,9 @@ jobs:
         run: pip install -r requirements.txt -r requirements-dev.txt
       - name: Start backend
         run: |
-          SKIP_DB_INIT=1 MONGO_URL="mongodb://localhost:27017/?serverSelectionTimeoutMS=500" \
-            python -m uvicorn main:app --host 127.0.0.1 --port 8000 &
+          # Load test only exercises GET /; disable lifespan startup hooks so
+          # Postgres/Mongo availability does not affect this CI job.
+          python -m uvicorn main:app --host 127.0.0.1 --port 8000 --lifespan off &
           for _ in $(seq 1 30); do curl -sf http://127.0.0.1:8000/ && break; sleep 1; done
       - name: Run Locust (headless)
         run: |
