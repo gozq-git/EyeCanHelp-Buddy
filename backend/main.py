@@ -7,7 +7,8 @@ load_dotenv()
 from database.postgres import init_db
 from database.mongo import close_mongo_client, init_mongo
 import services.patient.model  # noqa: F401 — registers TBL_PATIENT and TBL_IVT with SQLAlchemy metadata
-import services.chatbot.model  # noqa: F401 — registers TBL_PAYMENT with SQLAlchemy metadata
+import services.chatbot.model  # noqa: F401 — registers chatbot SQLAlchemy metadata
+import services.billing.model  # noqa: F401 — registers billing SQLAlchemy metadata
 from services.billing.router import router as billing_router
 from services.chatbot.router import acknowledgement_router, chat_router
 from services.patient.router import epic_router, patient_router
@@ -18,7 +19,8 @@ async def lifespan(app: FastAPI):
     try:
         await init_db()
     except Exception as e:
-        print(f"[WARNING] PostgreSQL unavailable, skipping DB init: {e}")
+        print(f"[ERROR] PostgreSQL init failed; app startup aborted: {e}")
+        raise
     try:
         await init_mongo()
     except Exception as e:

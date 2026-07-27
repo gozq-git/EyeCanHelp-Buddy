@@ -43,9 +43,9 @@ export default function FinancialCounsellingDoc({ formData = {} }) {
     surgeon = 'Dr. Koh CS',
     mcr = '0001231241',
     diagnosis = 'H35.31',
-    estCost = 123,
+    estCost,
     injections = 1,
-    maxMedisaveClaimable = 250,
+    maxMedisaveClaimable,
     paymentMode = 'Medisave',
   } = formData
 
@@ -72,7 +72,7 @@ export default function FinancialCounsellingDoc({ formData = {} }) {
         const [minPart, maxPart] = rawCost.split('-').map(v => v.trim().replace(/^\$/, ''))
         return `$${minPart} - $${maxPart}`
       })()
-    : (rawCost ? (rawCost.startsWith('$') ? rawCost : `$${rawCost}`) : '$123')
+    : (rawCost ? (rawCost.startsWith('$') ? rawCost : `$${rawCost}`) : 'Not available')
 
   return (
     <div style={{
@@ -141,7 +141,7 @@ export default function FinancialCounsellingDoc({ formData = {} }) {
         <span style={{ color: '#D32F2F', fontWeight: 700, fontSize: '14px' }}>{rangeText}</span>
         {' '}for {injections} injection(s)
         <div style={{ fontSize: '9px', color: '#444', marginTop: '3px' }}>
-          Max Medisave Claimable: <strong>${maxMedisaveClaimable}</strong>
+          Max Medisave Claimable: <strong>{maxMedisaveClaimable != null ? `$${maxMedisaveClaimable}` : 'Not available'}</strong>
         </div>
         <div style={{ fontSize: '9px', color: '#777', marginTop: '3px' }}>
           Note: 1. Price subject to GST. 2. Consult fee, diagnostics &amp; non-std drugs NOT included. 3. Charges may change.

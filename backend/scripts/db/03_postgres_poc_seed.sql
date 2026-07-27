@@ -13,7 +13,7 @@
 --          -f 03_postgres_poc_seed.sql
 -- =====================================================================
 
-INSERT INTO "TBL_PATIENT" (patient_id, patient_name, patient_dob, phone_number) VALUES
-    ('P001', 'Tan Ah Kow',   '1952-08-12', '+6591234567'),
-    ('P002', 'Lim Siew Eng', '1965-03-25', '+6598765432')
+INSERT INTO patient."TBL_PATIENT" (patient_id, patient_name, patient_dob, gender, phone_number, email, status) VALUES
+    ('a25d9f8b-76b8-4f2a-8e2c-43fd5eb15a6c', 'Tan Ah Kow',   '1952-08-12', 'male',   '+6591234567', 'tan.ah.kow@example.com', 'active'),
+    ('4db15be7-a9f5-4bf1-a7bc-938d0f838dbc', 'Lim Siew Eng', '1965-03-25', 'female', '+6598765432', 'lim.siew.eng@example.com', 'active')
 ON CONFLICT (patient_id) DO NOTHING;

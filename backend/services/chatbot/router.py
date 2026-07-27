@@ -14,7 +14,7 @@ from .schema import (
     ChatRequest,
     ChatResponse,
 )
-from .service import chat, chat_stream, save_patient_acknowledgement, save_payment
+from .service import chat, chat_stream, save_patient_acknowledgement
 from .service import save_chat_exchange
 
 chat_router = APIRouter(prefix="/chat", tags=["Chatbot"])
@@ -142,15 +142,12 @@ async def get_latest_acknowledgement(patient_id: str):
 @acknowledgement_router.post("", response_model=AcknowledgementResponse)
 async def submit_acknowledgement(
     request: AcknowledgementRequest,
-    db: AsyncSession = Depends(get_db),
 ):
     mongo_db = mongo_module.get_mongo_db()
 
     record = await save_patient_acknowledgement(request.patient_record, mongo_db)
-    payment = await save_payment(request.payment, db)
 
     return AcknowledgementResponse(
         record=record,
-        payment=payment,
         message="Patient acknowledgement recorded successfully.",
     )

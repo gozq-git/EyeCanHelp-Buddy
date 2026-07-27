@@ -75,14 +75,14 @@ async def test_init_db_runs_create_all_and_seed(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_seed_db_executes_three_upsert_statements(monkeypatch):
+async def test_seed_db_executes_two_upsert_statements(monkeypatch):
     executed = []
 
     monkeypatch.setattr(postgres, "AsyncSessionLocal", lambda: _FakeSession(executed))
 
     await postgres._seed_db()
 
-    assert len(executed) == 3
+    assert len(executed) == 2
 
 
 @pytest.mark.asyncio

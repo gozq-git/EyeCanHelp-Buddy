@@ -6,33 +6,12 @@ import { sendChatMessage, sendChatMessageStream, submitAcknowledgement, getEpicR
 let _msgId = 1
 const nextId = () => ++_msgId
 
-const INIT_FORM = { last3mths_admission: false, stroke_heartAtt_last6mths: false, taking_antibiotics: false, pregnant: false, record_eyes: 'OD', record_number_of_injections: 1, record_class: '', record_performer: 'Nurse', estimated_cost: 123, estimated_cost_min: 123, estimated_cost_max: 123, estimated_cost_range: '123 - 123', payment_mode: 'Medisave (Self)' }
+const INIT_FORM = { last3mths_admission: false, stroke_heartAtt_last6mths: false, taking_antibiotics: false, pregnant: false, record_eyes: 'OD', record_number_of_injections: 1, record_class: '', record_performer: 'Nurse', estimated_cost: null, estimated_cost_min: null, estimated_cost_max: null, estimated_cost_range: '', max_medisave_claimable: null, payment_mode: 'Medisave (Self)' }
 const INIT_MESSAGES = [{ id: 1, role: 'bot', type: 'welcome', content: '' }]
 
-// Total cost shown to the patient before payment-mode selection. Mirrors the default
-// in FinancialCounsellingDoc and the payment.payment_estCostPerInjection used by buildPayload.
-const DEFAULT_PROCEDURE_COST = 123
 const PREPROC_LABELS = ['Fill up IVT Pre-Procedure Acknowledgement Form', 'Fill up IVT Pre-Procedure Acknowledgement Form', 'Fill up pre-procedure']
 const POSTOP_LABELS = ['View Post-IVT Advice Form', 'Fill up post-operation checklist']
 const APPOINTMENT_LABELS = ['Book Appointment', 'Appointment']
-
-function getEstimatedCostForClass(classCode) {
-  if (classCode === 'PTE') return 300
-  if (classCode === 'SUB') return 200
-  return DEFAULT_PROCEDURE_COST
-}
-
-function getFallbackRange(classCode, performer, injections) {
-  const inj = Math.max(1, Number(injections) || 1)
-  const cls = (classCode || '').toUpperCase()
-  const perf = (performer || '').toUpperCase()
-  if (cls === 'SUB' && perf === 'DOCTOR') return { min: 86 * inj, max: 310 * inj }
-  if (cls === 'SUB' && perf === 'NURSE') return { min: 62 * inj, max: 220 * inj }
-  if (cls === 'PTE' && perf === 'DOCTOR') return { min: 430 * inj, max: 480 * inj }
-  if (cls === 'PTE' && perf === 'NURSE') return { min: 300 * inj, max: 350 * inj }
-  const fallback = getEstimatedCostForClass(cls)
-  return { min: fallback, max: fallback }
-}
 
 function formatRangeWithCurrency(rangeText) {
   const raw = String(rangeText || '').trim()
@@ -67,8 +46,8 @@ function buildPayload(answers, epicRecord) {
       payment_id: `PAY-${patientId}-${Date.now()}`,
       payment_name: patientName,
       payment_diagnosis: diagnosis,
-      payment_maxMedisave: 250,
-      payment_estCostPerInjection: answers.estimated_cost_max || answers.estimated_cost || getEstimatedCostForClass(answers.record_class),
+      payment_maxMedisave: Number(answers.max_medisave_claimable ?? 0),
+      payment_estCostPerInjection: Number(answers.estimated_cost_max ?? answers.estimated_cost ?? 0),
       payment_mode: answers.payment_mode || 'Medisave (Self)',
     },
   }
@@ -373,11 +352,11 @@ export default function ChatWindow({ onBack }) {
               site: latest.record_eyes || epicRecord?.record_eyes || '',
               diagnosis: latest.record_diagnosis || epicRecord?.record_diagnosis || 'H35.31',
               medication: latest.record_medication || epicRecord?.record_medication || '',
-              estCost: getEstimatedCostForClass(latest.record_class),
+              estCost: latest.estimated_cost_range || latest.payment_estCostPerInjection || '',
               injections: latest.record_number_of_injections || 1,
               classCode: latest.record_class || '',
               performer: latest.record_performer || '',
-              maxMedisaveClaimable: 250,
+              maxMedisaveClaimable: latest.payment_maxMedisave,
               paymentMode: latest.payment_mode || 'Medisave (Self)',
             },
           })
@@ -411,11 +390,11 @@ export default function ChatWindow({ onBack }) {
               site: epicRecord?.record_eyes || '',
               diagnosis: epicRecord?.record_diagnosis || 'H35.31',
               medication: epicRecord?.record_medication || '',
-              estCost: getEstimatedCostForClass(epicRecord?.record_class),
+              estCost: epicRecord?.estimated_cost_range || epicRecord?.payment_estCostPerInjection || '',
               injections: epicRecord?.record_number_of_injections || 1,
               classCode: epicRecord?.record_class || '',
               performer: epicRecord?.record_performer || '',
-              maxMedisaveClaimable: 250,
+              maxMedisaveClaimable: epicRecord?.payment_maxMedisave,
               paymentMode: epicRecord?.payment_mode || 'Medisave (Self)',
             },
           })
@@ -533,41 +512,41 @@ export default function ChatWindow({ onBack }) {
       }
       const eyes = isLeft ? 'OS' : 'OD'
       const injections = 1
-      const fallbackRange = getFallbackRange(formAnswers.record_class, formAnswers.record_performer, injections)
-      let updated = {
-        ...formAnswers,
-        record_eyes: eyes,
-        record_number_of_injections: injections,
-        estimated_cost_min: fallbackRange.min,
-        estimated_cost_max: fallbackRange.max,
-        estimated_cost: fallbackRange.max,
-        estimated_cost_range: `${fallbackRange.min} - ${fallbackRange.max}`,
-      }
+
+      let updated = null
       try {
         const { data } = await calculateBill({
           recordClass: formAnswers.record_class,
           performer: formAnswers.record_performer,
           injections,
         })
-        if (typeof data?.estimated_cost_min === 'number' && typeof data?.estimated_cost_max === 'number') {
-          const rangeText = `${data.estimated_cost_min} - ${data.estimated_cost_max}`
-          updated = {
-            ...updated,
-            estimated_cost_min: data.estimated_cost_min,
-            estimated_cost_max: data.estimated_cost_max,
-            estimated_cost: data.estimated_cost_max,
-            estimated_cost_range: rangeText,
-          }
+        if (typeof data?.estimated_cost_min !== 'number' || typeof data?.estimated_cost_max !== 'number') {
+          throw new Error('Invalid billing response')
+        }
+        updated = {
+          ...formAnswers,
+          record_eyes: eyes,
+          record_number_of_injections: injections,
+          estimated_cost_min: data.estimated_cost_min,
+          estimated_cost_max: data.estimated_cost_max,
+          estimated_cost: data.estimated_cost_max,
+          estimated_cost_range: `${data.estimated_cost_min} - ${data.estimated_cost_max}`,
+          max_medisave_claimable: data.max_medisave_claimable,
         }
       } catch {
-        // Fall back to client-side defaults when billing service is unavailable.
+        addMsg({
+          role: 'bot',
+          type: 'text',
+          content: 'I could not retrieve billing rates for this class and performer. Please contact the clinic billing desk or try again after pricing is configured.',
+        })
+        return
       }
       setFormAnswers(updated)
       setPreProcStep('cost_confirm')
-      addMsg({ role: 'bot', type: 'text', content: `The total cost of the procedure will be ${formatRangeWithCurrency(updated.estimated_cost_range || `${updated.estimated_cost || DEFAULT_PROCEDURE_COST} - ${updated.estimated_cost || DEFAULT_PROCEDURE_COST}`)}, do you want to proceed?\n• Yes / No` })
+      addMsg({ role: 'bot', type: 'text', content: `The total cost of the procedure will be ${formatRangeWithCurrency(updated.estimated_cost_range)}, do you want to proceed?\n• Yes / No` })
     } else if (preProcStep === 'cost_confirm') {
       if (!lower.startsWith('y') && !lower.startsWith('n')) {
-        addMsg({ role: 'bot', type: 'text', content: `Sorry, I didn't understand that. Please answer Yes or No.\n\nThe total cost of the procedure will be ${formatRangeWithCurrency(formAnswers.estimated_cost_range || `${formAnswers.estimated_cost || DEFAULT_PROCEDURE_COST} - ${formAnswers.estimated_cost || DEFAULT_PROCEDURE_COST}`)}, do you want to proceed?` })
+        addMsg({ role: 'bot', type: 'text', content: `Sorry, I didn't understand that. Please answer Yes or No.\n\nThe total cost of the procedure will be ${formatRangeWithCurrency(formAnswers.estimated_cost_range)}, do you want to proceed?` })
         return
       }
       if (lower.startsWith('n')) {
@@ -635,16 +614,16 @@ export default function ChatWindow({ onBack }) {
             site: confirmedEyes,
             diagnosis: record?.record_diagnosis || 'H35.31',
             medication: record?.record_medication || epicRecord?.record_medication || '',
-            estCost: updated.estimated_cost_range || `${payment?.payment_estCostPerInjection || updated.estimated_cost || DEFAULT_PROCEDURE_COST}`,
+            estCost: updated.estimated_cost_range || payment?.payment_estCostPerInjection || '',
             injections: record?.record_number_of_injections || updated.record_number_of_injections || 1,
             classCode: record?.record_class || updated.record_class || '',
             performer: record?.record_performer || updated.record_performer || '',
-            maxMedisaveClaimable: payment?.payment_maxMedisave || 250,
+            maxMedisaveClaimable: payment?.payment_maxMedisave || updated.max_medisave_claimable,
             paymentMode: payment?.payment_mode || paymentMode,
           },
         })
       } catch {
-        addMsg({ role: 'bot', type: 'financial_doc', content: '', formData: { site: updated.record_eyes, estCost: updated.estimated_cost_range || `${updated.estimated_cost || DEFAULT_PROCEDURE_COST}`, injections: updated.record_number_of_injections || 1, classCode: updated.record_class || '', performer: updated.record_performer || '', maxMedisaveClaimable: 250, paymentMode } })
+        addMsg({ role: 'bot', type: 'financial_doc', content: '', formData: { site: updated.record_eyes, estCost: updated.estimated_cost_range || '', injections: updated.record_number_of_injections || 1, classCode: updated.record_class || '', performer: updated.record_performer || '', maxMedisaveClaimable: updated.max_medisave_claimable, paymentMode } })
       } finally {
         setLoading(false)
       }
