@@ -45,6 +45,11 @@ export async function mockBackend(page, overrides = {}) {
     }),
     patient: (route) => route.fulfill(json(PATIENT_P001)),
     epicRecord: (route) => route.fulfill(json(EPIC_RECORD_P001)),
+    billing: (route) => route.fulfill(json({
+      estimated_cost_min: 430,
+      estimated_cost_max: 480,
+      max_medisave_claimable: 250,
+    })),
     // No prior acknowledgement by default → 404 so the post-op merge is skipped.
     latestAck: (route) => route.fulfill(json({ detail: 'not found' }, 404)),
     submitAck: (route) => route.fulfill(json({
@@ -56,6 +61,7 @@ export async function mockBackend(page, overrides = {}) {
   }
 
   await page.route('**/api/chat*', handlers.chat)
+  await page.route('**/api/billing/calculate', handlers.billing)
   await page.route('**/api/acknowledgement/latest/**', handlers.latestAck)
   await page.route('**/api/acknowledgement', handlers.submitAck)
   await page.route('**/api/epic/patient/*/record', handlers.epicRecord)
