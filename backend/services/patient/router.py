@@ -39,19 +39,22 @@ async def get_patient(patient_id: str, db: AsyncSession = Depends(get_db)):
         "patient_id": patient.patient_id,
         "patient_name": patient.patient_name,
         "patient_dob": patient.patient_dob,
+        "gender": patient.gender,
         "phone_number": patient.phone_number,
+        "email": patient.email,
+        "status": patient.status,
     }
 
 
 @patient_router.post("")
 async def create_patient_record(data: PatientCreate, db: AsyncSession = Depends(get_db)):
-    existing = await get_patient_by_id(data.patient_id, db)
-    if existing:
-        raise HTTPException(status_code=409, detail="Patient already exists")
     patient = await create_patient(data, db)
     return {
         "patient_id": patient.patient_id,
         "patient_name": patient.patient_name,
         "patient_dob": patient.patient_dob,
+        "gender": patient.gender,
         "phone_number": patient.phone_number,
+        "email": patient.email,
+        "status": patient.status,
     }

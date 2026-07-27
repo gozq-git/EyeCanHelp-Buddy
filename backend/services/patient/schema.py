@@ -1,14 +1,18 @@
-from datetime import datetime
+from datetime import date, datetime
+from uuid import UUID
 
 from pydantic import BaseModel, Field
 
 
 class PatientSchema(BaseModel):
     resourceType: str = "Patient"
-    patient_id: str
+    patient_id: UUID
     patient_name: str
-    patient_dob: str
+    patient_dob: date
+    gender: str | None = None
     phone_number: str | None = None
+    email: str | None = None
+    status: str | None = None
 
     model_config = {"from_attributes": True}
 
@@ -46,10 +50,12 @@ class IVTSchema(BaseModel):
 
 
 class PatientCreate(BaseModel):
-    patient_id: str
     patient_name: str
-    patient_dob: str
+    patient_dob: date
+    gender: str | None = None
     phone_number: str | None = None
+    email: str | None = None
+    status: str | None = None
 
 
 __all__ = [

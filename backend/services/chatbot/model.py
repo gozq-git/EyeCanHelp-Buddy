@@ -5,6 +5,8 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from database.postgres import Base
 
+CHATBOT_SCHEMA = "chatbot"
+
 
 def _sgt_now_naive() -> datetime:
 	# Store Singapore wall-clock time in a TIMESTAMP column.
@@ -14,6 +16,7 @@ def _sgt_now_naive() -> datetime:
 
 class ChatExchangeLog(Base):
 	__tablename__ = "TBL_CHAT_EXCHANGE_LOG"
+	__table_args__ = {"schema": CHATBOT_SCHEMA}
 
 	id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 	session_id: Mapped[str] = mapped_column(String(100), index=True, nullable=False)
