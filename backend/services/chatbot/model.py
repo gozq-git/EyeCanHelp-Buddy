@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import DateTime, Float, Integer, String, Text
+from sqlalchemy import DateTime, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from database.postgres import Base
@@ -10,17 +10,6 @@ def _sgt_now_naive() -> datetime:
 	# Store Singapore wall-clock time in a TIMESTAMP column.
 	sgt = timezone(timedelta(hours=8))
 	return datetime.now(sgt).replace(tzinfo=None)
-
-
-class Payment(Base):
-	__tablename__ = "TBL_PAYMENT"
-
-	payment_id: Mapped[str] = mapped_column(String(50), primary_key=True)
-	payment_name: Mapped[str] = mapped_column(String(255), nullable=False)
-	payment_diagnosis: Mapped[str] = mapped_column(String(50), nullable=False)
-	payment_maxMedisave: Mapped[float] = mapped_column(Float, nullable=False)
-	payment_estCostPerInjection: Mapped[float] = mapped_column(Float, nullable=False)
-	payment_mode: Mapped[str] = mapped_column(String(50), nullable=False)
 
 
 class ChatExchangeLog(Base):
@@ -34,4 +23,4 @@ class ChatExchangeLog(Base):
 	created_at: Mapped[datetime] = mapped_column(DateTime, default=_sgt_now_naive, nullable=False)
 
 
-__all__ = ["Payment", "ChatExchangeLog"]
+__all__ = ["ChatExchangeLog"]

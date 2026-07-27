@@ -14,8 +14,8 @@ and become no-ops, so it is safe to run both.
 
 | #  | File                                | Purpose                                       | Run in production? |
 |----|-------------------------------------|-----------------------------------------------|--------------------|
-| 1  | `01_postgres_schema.sql`            | Create tables (`TBL_PATIENT`, `TBL_IVT`, `TBL_PAYMENT`) | ✅ Yes |
-| 2  | `02_postgres_reference_data.sql`    | IVT medications + payment-mode rows           | ✅ Yes |
+| 1  | `01_postgres_schema.sql`            | Create tables (`TBL_PATIENT`, `TBL_IVT`, `TBL_CHAT_EXCHANGE_LOG`) | ✅ Yes |
+| 2  | `02_postgres_reference_data.sql`    | IVT medication rows                           | ✅ Yes |
 | 3  | `03_postgres_poc_seed.sql`          | P001 / P002 demo patients                     | ❌ Staging / demo only |
 | 4  | `01_mongo_schema.js`                | `TBL_PATIENT_RECORDS` collection + indexes    | ✅ Yes |
 | 5  | `02_mongo_poc_seed.js`              | `REC-P001-001` / `REC-P002-001` EPIC records  | ❌ Staging / demo only |
@@ -72,13 +72,12 @@ docker exec -i eyecanhelp-mongo mongosh eyecanhelpbuddy --quiet < 01_mongo_schem
 ```bash
 docker exec eyecanhelp-postgres psql -U postgres -d eyecanhelpbuddy \
     -c "\dt" \
-    -c "SELECT count(*) FROM \"TBL_IVT\";" \
-    -c "SELECT count(*) FROM \"TBL_PAYMENT\";"
+    -c "SELECT count(*) FROM \"TBL_IVT\";"
 
 docker exec eyecanhelp-mongo mongosh eyecanhelpbuddy --quiet --eval \
     "db.TBL_PATIENT_RECORDS.getIndexes()"
 ```
 
-Expected after a fresh production run: 3 tables, 3 IVT rows, 4 payment
-rows, 0 patient rows; Mongo collection exists with `_id_`,
+Expected after a fresh production run: 3 tables, 3 IVT rows, 0 patient
+rows; Mongo collection exists with `_id_`,
 `idx_record_id_unique`, and `idx_patient_id_issued_desc` indexes.

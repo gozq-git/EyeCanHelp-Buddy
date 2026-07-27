@@ -1,28 +1,5 @@
 from datetime import datetime
 from pydantic import BaseModel, Field
-from typing import Literal
-
-
-class PaymentSchema(BaseModel):
-    resourceType: str = "Coverage"
-    payment_id: str
-    payment_name: str
-    payment_diagnosis: str
-    payment_maxMedisave: float
-    payment_estCostPerInjection: float
-    payment_mode: Literal[
-        "Medishield Life / Integrated Plan",
-        "CSC",
-        "Medisave (Self)",
-        "MAF",
-        "Cash",
-        "NOK Medisave",
-        "Medisave",
-        "MediShield",
-        "CHAS",
-    ]
-
-    model_config = {"from_attributes": True}
 
 
 class PatientRecordCreate(BaseModel):
@@ -64,12 +41,10 @@ class ChatResponse(BaseModel):
 
 class AcknowledgementRequest(BaseModel):
     patient_record: PatientRecordCreate
-    payment: PaymentSchema
 
 
 class AcknowledgementResponse(BaseModel):
     record: PatientRecordResponse
-    payment: PaymentSchema
     message: str
 
 
@@ -77,7 +52,6 @@ __all__ = [
     "ChatMessage",
     "ChatRequest",
     "ChatResponse",
-    "PaymentSchema",
     "PatientRecordCreate",
     "PatientRecordResponse",
     "AcknowledgementRequest",

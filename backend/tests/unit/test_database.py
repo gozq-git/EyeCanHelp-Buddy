@@ -74,8 +74,8 @@ async def test_seed_db_inserts_all_seed_tables(monkeypatch):
     session = _FakeSession()
     monkeypatch.setattr(pg, "AsyncSessionLocal", lambda: session)
     await pg._seed_db()
-    # One insert per seed table: patients, ivts, payments.
-    assert len(session.executed) == 3
+    # One insert per seed table: patients and ivts.
+    assert len(session.executed) == 2
 
 
 async def test_get_db_yields_session(monkeypatch):

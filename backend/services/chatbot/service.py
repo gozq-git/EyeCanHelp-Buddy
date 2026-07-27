@@ -4,8 +4,8 @@ from datetime import datetime
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .model import ChatExchangeLog, Payment
-from .schema import PatientRecordCreate, PatientRecordResponse, PaymentSchema
+from .model import ChatExchangeLog
+from .schema import PatientRecordCreate, PatientRecordResponse
 from .llm import chat, chat_stream
 
 
@@ -22,24 +22,6 @@ async def save_patient_acknowledgement(
 	}
 	await mongo_db["TBL_PATIENT_RECORDS"].insert_one(doc)
 	return PatientRecordResponse(record_id=record_id, issued=issued, **data.model_dump())
-
-
-async def save_payment(
-	payment_data: PaymentSchema,
-	db: AsyncSession,
-) -> PaymentSchema:
-	record = Payment(
-		payment_id=payment_data.payment_id,
-		payment_name=payment_data.payment_name,
-		payment_diagnosis=payment_data.payment_diagnosis,
-		payment_maxMedisave=payment_data.payment_maxMedisave,
-		payment_estCostPerInjection=payment_data.payment_estCostPerInjection,
-		payment_mode=payment_data.payment_mode,
-	)
-	db.add(record)
-	await db.commit()
-	await db.refresh(record)
-	return PaymentSchema.model_validate(record)
 
 
 async def save_chat_exchange(
@@ -61,4 +43,4 @@ async def save_chat_exchange(
 	return record
 
 
-__all__ = ["chat", "chat_stream", "save_patient_acknowledgement", "save_payment", "save_chat_exchange"]
+__all__ = ["chat", "chat_stream", "save_patient_acknowledgement", "save_chat_exchange"]

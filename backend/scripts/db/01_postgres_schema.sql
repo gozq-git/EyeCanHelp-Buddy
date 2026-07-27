@@ -30,17 +30,6 @@ CREATE TABLE IF NOT EXISTS "TBL_IVT" (
     ivt_medication VARCHAR(255) NOT NULL
 );
 
--- TBL_PAYMENT — FHIR R4 Coverage/Claim. Per-acknowledgement payment record.
--- Note: column names use camelCase to match the SQLAlchemy model exactly.
-CREATE TABLE IF NOT EXISTS "TBL_PAYMENT" (
-    payment_id                    VARCHAR(50)      PRIMARY KEY,
-    payment_name                  VARCHAR(255)     NOT NULL,
-    payment_diagnosis             VARCHAR(50)      NOT NULL,  -- ICD-10
-    "payment_maxMedisave"         DOUBLE PRECISION NOT NULL,  -- SGD
-    "payment_estCostPerInjection" DOUBLE PRECISION NOT NULL,  -- SGD
-    payment_mode                  VARCHAR(50)      NOT NULL   -- Medisave | NOK Medisave | Cash | MediShield | CHAS
-);
-
 -- TBL_CHAT_EXCHANGE_LOG — General enquiry chat transcript rows.
 -- Stores one row per user prompt and assistant response pair.
 CREATE TABLE IF NOT EXISTS "TBL_CHAT_EXCHANGE_LOG" (
