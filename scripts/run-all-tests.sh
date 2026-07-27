@@ -65,6 +65,7 @@ run_load() {
   green "Load: starting throwaway backend on :8000"
   mkdir -p "$REPORTS/load"
   ( cd "$ROOT/backend" && \
+    SKIP_DB_INIT=1 \
     MONGO_URL="mongodb://localhost:27017/?serverSelectionTimeoutMS=500" \
     "$PYTHON" -m uvicorn main:app --host 127.0.0.1 --port 8000 ) >/tmp/eyecan-uvicorn.log 2>&1 &
   local uv_pid=$!
