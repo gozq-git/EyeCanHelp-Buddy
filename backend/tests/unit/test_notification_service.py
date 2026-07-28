@@ -67,6 +67,10 @@ def _request(**overrides):
 def test_build_appointment_email_contains_slot_and_reference():
     out = build_appointment_email(_request(), correlation_id="corr-001")
     assert out["subject"] == "Appointment request received for Tan Ah Kow"
+    assert "Dear TTSH Medical Staff," in out["text_body"]
+    assert "Patient details:" in out["text_body"]
+    assert "- Name: Tan Ah Kow" in out["text_body"]
+    assert "- ID: P001" in out["text_body"]
     assert "Preferred slot: Monday (AM), Asia/Singapore." in out["text_body"]
     assert "Reference: corr-001" in out["text_body"]
 
