@@ -100,6 +100,7 @@ async def test_send_appointment_notification_success(monkeypatch):
 @pytest.mark.asyncio
 async def test_send_appointment_notification_failure_wrapped(monkeypatch):
     monkeypatch.setenv("GMAIL_SENDER_EMAIL", "eyecanhelpbuddy@gmail.com")
+    monkeypatch.setenv("GMAIL_DESTINATION_EMAIL", "ops@example.com")
     service = _FakeGmailService(_FakeMessages(should_raise=True))
 
     with pytest.raises(NotificationDeliveryError):
