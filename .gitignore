@@ -20,6 +20,10 @@ e2e/playwright-report/
 .env
 *.env
 
+# Google OAuth local artifacts
+backend/scripts/credentials.json
+backend/scripts/token.json
+
 # Misc
 .DS_Store
 *.log

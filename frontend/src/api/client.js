@@ -149,3 +149,6 @@ export const calculateBill = ({ recordClass, performer, injections }) =>
     performer,
     injections,
   })
+
+export const enqueueAppointmentNotification = (data) =>
+  api.post('/notifications/appointments', data)

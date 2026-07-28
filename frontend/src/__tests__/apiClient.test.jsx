@@ -15,6 +15,7 @@ vi.mock('axios', () => ({
 }))
 
 import {
+  enqueueAppointmentNotification,
   createPatient,
   getEpicPatient,
   getEpicRecord,
@@ -48,12 +49,14 @@ describe('api client', () => {
     submitAcknowledgement({ hello: 'world' })
     sendChatMessage([{ role: 'user', content: 'hi' }])
     createPatient({ patient_id: 'P003' })
+    enqueueAppointmentNotification({ patient_id: 'P001' })
 
     expect(mocks.mockPost).toHaveBeenCalledWith('/acknowledgement', { hello: 'world' })
     expect(mocks.mockPost).toHaveBeenCalledWith('/chat', {
       messages: [{ role: 'user', content: 'hi' }],
     })
     expect(mocks.mockPost).toHaveBeenCalledWith('/patient', { patient_id: 'P003' })
+    expect(mocks.mockPost).toHaveBeenCalledWith('/notifications/appointments', { patient_id: 'P001' })
   })
 
   it('returns a resolved mock singpass login payload', async () => {

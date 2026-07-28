@@ -56,6 +56,8 @@ default collection.
   parsing, schema validation, and EPIC service behavior).
 * **Integration** tests exercise each `/api/...` route end-to-end through the
   real FastAPI stack with those dependencies overridden.
+* Notifications tests cover direct email delivery via the backend notifications
+  service (Gmail API path is mocked in unit/integration tests).
 
 ## Manual AgentCore runtime test
 

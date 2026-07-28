@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react'
 import MessageBubble from './MessageBubble'
 import EyeLogoSVG from './EyeLogoSVG'
-import { sendChatMessage, sendChatMessageStream, submitAcknowledgement, getEpicRecord, getPatient, createPatient, getLatestAcknowledgement, calculateBill } from '../api/client'
+import { sendChatMessage, sendChatMessageStream, submitAcknowledgement, getEpicRecord, getPatient, createPatient, getLatestAcknowledgement, calculateBill, enqueueAppointmentNotification } from '../api/client'
 
 let _msgId = 1
 const nextId = () => ++_msgId
@@ -90,6 +90,7 @@ export default function ChatWindow({ onBack }) {
   const [mode, setMode] = useState('welcome')
   const [preProcStep, setPreProcStep] = useState('login')
   const [postOpStep, setPostOpStep] = useState('login')
+  const [, setAppointmentStep] = useState('login')
   const [formAnswers, setFormAnswers] = useState(INIT_FORM)
   const [epicRecord, setEpicRecord] = useState(null)
   const [currentPatientId, setCurrentPatientId] = useState(null)
@@ -153,12 +154,14 @@ export default function ChatWindow({ onBack }) {
       addMsg({ role: 'bot', type: 'singpass', content: '' })
     } else if (APPOINTMENT_LABELS.includes(label)) {
       setMode('appointment')
-      addMsg({ role: 'bot', type: 'text', content: 'Please share your preferred appointment day (Monday to Friday) and period (AM or PM).' })
-      addMsg({ role: 'bot', type: 'appointment_picker', content: '' })
+      setAppointmentStep('login')
+      addMsg({ role: 'bot', type: 'text', content: 'To book an appointment, would you please sign in below?' })
+      addMsg({ role: 'bot', type: 'singpass', content: '' })
     } else if (label === 'Return Menu') {
       setMode('welcome')
       setPreProcStep('login')
       setPostOpStep('login')
+      setAppointmentStep('login')
       setFormAnswers(INIT_FORM)
       setEpicRecord(null)
       setCurrentPatientId(null)
@@ -170,13 +173,31 @@ export default function ChatWindow({ onBack }) {
     }
   }
 
-  const handleAppointmentSubmit = ({ day, period }) => {
+  const handleAppointmentSubmit = async ({ day, period }) => {
     if (!day || !period) return
 
     const formatted = `${day} ${period}`
+    const patientName = epicRecord?.record_name || regData.patient_name || 'Patient'
 
     addMsg({ role: 'user', type: 'text', content: `Preferred appointment slot: ${formatted}` })
-    addMsg({ role: 'bot', type: 'text', content: `Thanks. Your preferred slot (${formatted}) has been received. Our clinic staff will contact you to confirm availability.` })
+    setLoading(true)
+    try {
+      await enqueueAppointmentNotification({
+        patient_id: currentPatientId || regData.patient_id || 'UNKNOWN',
+        patient_name: patientName,
+        preferred_day: day,
+        preferred_period: period,
+        appointment_timezone: 'Asia/Singapore',
+        clinic_name: 'TTSH Eye Clinic',
+        requested_by: 'chatbot',
+      })
+      addMsg({ role: 'bot', type: 'text', content: `Thanks. Your preferred slot (${formatted}) has been received. Our clinic staff will contact you to confirm availability.` })
+    } catch {
+      addMsg({ role: 'bot', type: 'text', content: 'Sorry, we could not submit your appointment request right now. Please try again shortly.' })
+    } finally {
+      setLoading(false)
+    }
+    setAppointmentStep('complete')
   }
 
   const handleSingpassLogin = async (patientId) => {
@@ -230,6 +251,10 @@ export default function ChatWindow({ onBack }) {
           addMsg({ role: 'bot', type: 'text', content: `Welcome back, ${patientName}. Here is your post-operation checklist.` })
           addMsg({ role: 'bot', type: 'postop_doc', content: '', formData: epicRec })
           setPostOpStep('complete')
+        } else if (mode === 'appointment') {
+          addMsg({ role: 'bot', type: 'text', content: `Welcome back, ${patientName}. Please share your preferred appointment day (Monday to Friday) and period (AM or PM).` })
+          addMsg({ role: 'bot', type: 'appointment_picker', content: '' })
+          setAppointmentStep('picker')
         } else {
           addMsg({ role: 'bot', type: 'text', content: `Welcome back, ${patientName}. We will now proceed with the form.` })
           addMsg({ role: 'bot', type: 'text', content: 'Would you like to update your information?\n• Yes / No' })
@@ -297,6 +322,10 @@ export default function ChatWindow({ onBack }) {
           addMsg({ role: 'bot', type: 'text', content: 'Here is your post-operation checklist.' })
           addMsg({ role: 'bot', type: 'postop_doc', content: '', formData: null })
           setPostOpStep('complete')
+        } else if (mode === 'appointment') {
+          addMsg({ role: 'bot', type: 'text', content: 'Please share your preferred appointment day (Monday to Friday) and period (AM or PM).' })
+          addMsg({ role: 'bot', type: 'appointment_picker', content: '' })
+          setAppointmentStep('picker')
         } else {
           addMsg({ role: 'bot', type: 'text', content: 'We will now proceed with the form.\n\nHave you had a recent stroke or heart attack in the past 6 months?\n• Yes / No' })
           setPreProcStep('q_stroke')

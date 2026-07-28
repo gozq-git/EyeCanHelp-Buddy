@@ -13,6 +13,7 @@ vi.mock('../api/client', () => ({
   sendChatMessageStream: vi.fn(),
   submitAcknowledgement: vi.fn(),
   calculateBill: vi.fn(),
+  enqueueAppointmentNotification: vi.fn(),
   getPatient: vi.fn(),
   getEpicRecord: vi.fn(),
   createPatient: vi.fn(),
@@ -33,6 +34,7 @@ import {
   sendChatMessageStream,
   submitAcknowledgement,
   calculateBill,
+  enqueueAppointmentNotification,
   getPatient,
   getEpicRecord,
   createPatient,
@@ -637,7 +639,12 @@ describe('ChatWindow — Post-Operation Checklist flow', () => {
 // ─── Return Menu ──────────────────────────────────────────────────────────────
 
 describe('ChatWindow — Return Menu', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+    enqueueAppointmentNotification.mockResolvedValue({
+      data: { status: 'accepted', queue_message_id: 'msg-1', correlation_id: 'corr-1' },
+    })
+  })
 
   it('clicking Return Menu appends a new welcome bubble with quick-reply pills', async () => {
     render(<ChatWindow />)
@@ -650,10 +657,16 @@ describe('ChatWindow — Return Menu', () => {
     expect(screen.getAllByRole('button', { name: 'General Enquiry' }).length).toBeGreaterThanOrEqual(2)
   })
 
-  it('clicking Appointment from the main menu shows weekday and period inputs', async () => {
+  it('clicking Appointment from the main menu asks for Singpass login first, then shows weekday and period inputs', async () => {
     render(<ChatWindow />)
+    getPatient.mockResolvedValue(MOCK_PATIENT_RESPONSE)
+    getEpicRecord.mockResolvedValue(MOCK_EPIC_RECORD_RESPONSE)
+
     // Appointment lives only in the main welcome menu, not the completion bar.
     await userEvent.click(screen.getByRole('button', { name: 'Book Appointment' }))
+    expect(screen.getByRole('button', { name: /singpass login/i })).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: /singpass login/i }))
     expect(screen.getByText(/preferred appointment day/i)).toBeInTheDocument()
     expect(screen.getByLabelText('Preferred day')).toBeInTheDocument()
     expect(screen.getByLabelText('Preferred period')).toBeInTheDocument()
@@ -661,14 +674,47 @@ describe('ChatWindow — Return Menu', () => {
 
   it('submitting appointment day/period posts confirmation in chat', async () => {
     render(<ChatWindow />)
+    getPatient.mockResolvedValue(MOCK_PATIENT_RESPONSE)
+    getEpicRecord.mockResolvedValue(MOCK_EPIC_RECORD_RESPONSE)
+
     await userEvent.click(screen.getByRole('button', { name: 'Book Appointment' }))
+    await userEvent.click(screen.getByRole('button', { name: /singpass login/i }))
 
     fireEvent.change(screen.getByLabelText('Preferred day'), { target: { value: 'Monday' } })
     fireEvent.change(screen.getByLabelText('Preferred period'), { target: { value: 'AM' } })
     await userEvent.click(screen.getByRole('button', { name: 'Confirm appointment slot' }))
 
+    await waitFor(() => expect(enqueueAppointmentNotification).toHaveBeenCalledOnce())
+    expect(enqueueAppointmentNotification).toHaveBeenCalledWith({
+      patient_id: 'P001',
+      patient_name: 'Tan Ah Kow',
+      preferred_day: 'Monday',
+      preferred_period: 'AM',
+      appointment_timezone: 'Asia/Singapore',
+      clinic_name: 'TTSH Eye Clinic',
+      requested_by: 'chatbot',
+    })
+
     expect(screen.getByText(/Preferred appointment slot: Monday AM/i)).toBeInTheDocument()
     expect(screen.getByText(/has been received/i)).toBeInTheDocument()
+  })
+
+  it('shows an error message when appointment notification enqueue fails', async () => {
+    enqueueAppointmentNotification.mockRejectedValueOnce(new Error('Queue unavailable'))
+    render(<ChatWindow />)
+    getPatient.mockResolvedValue(MOCK_PATIENT_RESPONSE)
+    getEpicRecord.mockResolvedValue(MOCK_EPIC_RECORD_RESPONSE)
+
+    await userEvent.click(screen.getByRole('button', { name: 'Book Appointment' }))
+    await userEvent.click(screen.getByRole('button', { name: /singpass login/i }))
+
+    fireEvent.change(screen.getByLabelText('Preferred day'), { target: { value: 'Tuesday' } })
+    fireEvent.change(screen.getByLabelText('Preferred period'), { target: { value: 'PM' } })
+    await userEvent.click(screen.getByRole('button', { name: 'Confirm appointment slot' }))
+
+    await waitFor(() => {
+      expect(screen.getByText(/could not submit your appointment request right now/i)).toBeInTheDocument()
+    })
   })
 
   it('does not add Appointment to the flow-completion bar (Return Menu only)', async () => {

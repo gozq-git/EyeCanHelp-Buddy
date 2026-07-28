@@ -6,6 +6,8 @@ The backend in [backend](backend) now has two aligned parts:
 
 - A FastAPI application with service-isolated domains under [backend/services](backend/services)
 - An AgentCore coordinator runtime under [backend/agents/coordinator](backend/agents/coordinator)
+- A direct notifications pipeline for appointment confirmation:
+  backend API sends email via Gmail API
 
 Detailed package docs:
 - [backend/agents/README.md](backend/agents/README.md)
@@ -34,6 +36,10 @@ backend/
 │       ├── service.py               # chat + acknowledgement persistence logic
 │       ├── llm.py                   # AgentCore runtime invocation client
 │       ├── model.py
+│       └── schema.py
+│   └── notifications/
+│       ├── router.py                # /notifications/appointments endpoint
+│       ├── service.py               # Gmail payload mapping + send
 │       └── schema.py
 ├── agents/
 │   ├── coordinator/
@@ -76,6 +82,9 @@ $env:HEALTHCARE_AGENT_RUNTIME_ARN="arn:aws:bedrock-agentcore:...:runtime/..."
 
 Your AWS credentials need permission to invoke both specialist runtimes.
 
+For appointment notification emails (direct backend send), set Gmail OAuth2
+credentials and sender vars in `backend/.env`.
+
 You can copy [backend/.env.example](backend/.env.example) as a starting point.
 
 ### Run locally
@@ -89,6 +98,13 @@ python agents/coordinator/main.py
 ```
 
 The runtime exposes AgentCore-compatible endpoints (for example `/invocations`) on port `8080`.
+
+### Appointment notification pipeline (Backend -> Gmail API)
+
+- Endpoint: `POST /api/notifications/appointments`
+- Behavior: validates appointment notification payload and sends email directly through Gmail API
+
+Required environment variables are listed in [backend/.env.example](backend/.env.example).
 
 ### Agent runtime entrypoints
 
