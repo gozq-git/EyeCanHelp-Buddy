@@ -1,8 +1,16 @@
 import React, { useState } from 'react'
 
-export default function SingpassLoginButton({ onLogin }) {
+const COPY = {
+  en: { placeholder: 'username', loading: 'Logging in...', login: 'Singpass Login' },
+  zh: { placeholder: '用户名', loading: '登录中...', login: 'Singpass 登录' },
+  ms: { placeholder: 'nama pengguna', loading: 'Sedang log masuk...', login: 'Log Masuk Singpass' },
+  ta: { placeholder: 'பயனர் பெயர்', loading: 'உள்நுழைகிறது...', login: 'Singpass உள்நுழைவு' },
+}
+
+export default function SingpassLoginButton({ onLogin, language = 'en' }) {
   const [patientId, setPatientId] = useState('')
   const [loading, setLoading] = useState(false)
+  const copy = COPY[language] || COPY.en
 
   const handleClick = () => {
     if (!patientId.trim()) return
@@ -18,7 +26,7 @@ export default function SingpassLoginButton({ onLogin }) {
       <input
         value={patientId}
         onChange={e => setPatientId(e.target.value)}
-        placeholder="username"
+        placeholder={copy.placeholder}
         disabled={loading}
         style={{
           width: '100%',
@@ -50,7 +58,7 @@ export default function SingpassLoginButton({ onLogin }) {
           fontFamily: 'inherit',
         }}
       >
-        {loading ? 'Logging in…' : 'Singpass Login'}
+        {loading ? copy.loading : copy.login}
       </button>
     </div>
   )

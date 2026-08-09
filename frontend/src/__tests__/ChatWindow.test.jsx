@@ -727,4 +727,64 @@ describe('ChatWindow — Return Menu', () => {
   })
 })
 
+describe('ChatWindow — multilingual non-general flows', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    submitAcknowledgement.mockResolvedValue(MOCK_ACK_RESPONSE)
+    getPatient.mockResolvedValue(MOCK_PATIENT_RESPONSE)
+    getEpicRecord.mockResolvedValue(MOCK_EPIC_RECORD_RESPONSE)
+    calculateBill.mockResolvedValue({
+      data: {
+        record_class: 'PTE',
+        performer: 'Doctor',
+        injections: 1,
+        estimated_cost_min: 430,
+        estimated_cost_max: 480,
+        max_medisave_claimable: 250,
+      },
+    })
+    getLatestAcknowledgement.mockRejectedValue(new Error('no record'))
+  })
+
+  it('uses localized selection labels while preserving canonical English payload values', async () => {
+    render(<ChatWindow language="zh" />)
+    await userEvent.click(screen.getByRole('button', { name: '填写 IVT 术前确认表' }))
+    await userEvent.click(screen.getByRole('button', { name: /singpass login/i }))
+
+    await userEvent.click(screen.getByRole('button', { name: '是' }))
+    await userEvent.click(screen.getByRole('button', { name: '否' }))
+    await userEvent.click(screen.getByRole('button', { name: '否' }))
+    await userEvent.click(screen.getByRole('button', { name: '否' }))
+    await userEvent.click(screen.getByRole('button', { name: '否' }))
+    await userEvent.click(screen.getByRole('button', { name: '是' }))
+    await userEvent.click(screen.getByRole('button', { name: '私人' }))
+    await userEvent.click(screen.getByRole('button', { name: '医生' }))
+    await userEvent.click(screen.getByRole('button', { name: '右眼' }))
+    await userEvent.click(screen.getByRole('button', { name: '是' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Medisave（本人）' }))
+
+    await waitFor(() => expect(submitAcknowledgement).toHaveBeenCalledOnce())
+    const [payload] = submitAcknowledgement.mock.calls[0]
+    expect(payload.patient_record.record_class).toBe('PTE')
+    expect(payload.patient_record.record_performer).toBe('Doctor')
+    expect(payload.patient_record.record_eyes).toBe('OD')
+    expect(payload.payment.payment_mode).toBe('Medisave (Self)')
+  })
+
+  it('rejects non-English patient names during registration', async () => {
+    getPatient.mockRejectedValueOnce(new Error('missing'))
+    getEpicRecord.mockRejectedValueOnce(new Error('missing'))
+
+    render(<ChatWindow language="zh" />)
+    await userEvent.click(screen.getByRole('button', { name: '填写 IVT 术前确认表' }))
+    await userEvent.click(screen.getByRole('button', { name: /singpass login/i }))
+
+    await userEvent.type(screen.getByRole('textbox'), '张三')
+    await userEvent.keyboard('{Enter}')
+
+    expect(screen.getByText(/请输入英文姓名/i)).toBeInTheDocument()
+    expect(createPatient).not.toHaveBeenCalled()
+  })
+})
+
 
