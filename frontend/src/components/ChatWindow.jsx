@@ -2,16 +2,13 @@ import React, { useState, useRef, useEffect } from 'react'
 import MessageBubble from './MessageBubble'
 import EyeLogoSVG from './EyeLogoSVG'
 import { sendChatMessage, sendChatMessageStream, submitAcknowledgement, getEpicRecord, getPatient, createPatient, getLatestAcknowledgement, calculateBill, enqueueAppointmentNotification } from '../api/client'
+import { formatCopy, getCopy, PAYMENT_OPTIONS } from '../i18n/nonGeneralCopy'
 
 let _msgId = 1
 const nextId = () => ++_msgId
 
 const INIT_FORM = { last3mths_admission: false, stroke_heartAtt_last6mths: false, taking_antibiotics: false, pregnant: false, record_eyes: 'OD', record_number_of_injections: 1, record_class: '', record_performer: 'Nurse', estimated_cost: null, estimated_cost_min: null, estimated_cost_max: null, estimated_cost_range: '', max_medisave_claimable: null, payment_mode: 'Medisave (Self)' }
 const INIT_MESSAGES = [{ id: 1, role: 'bot', type: 'welcome', content: '' }]
-
-const PREPROC_LABELS = ['Fill up IVT Pre-Procedure Acknowledgement Form', 'Fill up pre-procedure']
-const POSTOP_LABELS = ['View Post-IVT Advice Form', 'Fill up post-operation checklist']
-const APPOINTMENT_LABELS = ['Book Appointment', 'Appointment']
 
 function formatRangeWithCurrency(rangeText) {
   const raw = String(rangeText || '').trim()
@@ -69,7 +66,11 @@ function buildAckFormData({ patientName, nric, dateIso, strokeHeartAtt, hospital
 
 function formatDate(iso) {
   try {
-    return new Date(iso).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+    const parsed = new Date(iso)
+    if (Number.isNaN(parsed.getTime())) {
+      return new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+    }
+    return parsed.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
   } catch {
     return new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
   }
@@ -86,7 +87,7 @@ const chipBtn = {
   fontFamily: 'inherit',
 }
 
-export default function ChatWindow({ onBack }) {
+export default function ChatWindow({ onBack, language = 'en' }) {
   const [mode, setMode] = useState('welcome')
   const [preProcStep, setPreProcStep] = useState('login')
   const [postOpStep, setPostOpStep] = useState('login')
@@ -105,6 +106,36 @@ export default function ChatWindow({ onBack }) {
   const topRef = useRef(null)
   const streamAbortRef = useRef(null)
   const generalEnquirySessionIdRef = useRef(`ge-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`)
+  const tr = getCopy(language)
+  const paymentOptionsLocalized = PAYMENT_OPTIONS.map((option) => ({
+    value: option.value,
+    label: option.label[language] || option.label.en,
+  }))
+
+  const normalizeInput = (value) => {
+    const text = String(value || '').trim()
+    if (!text) return text
+    const lower = text.toLowerCase()
+    const localizedPairs = [
+      [tr('yes').toLowerCase(), 'Yes'],
+      [tr('no').toLowerCase(), 'No'],
+      [tr('private').toLowerCase(), 'Private'],
+      [tr('subsidised').toLowerCase(), 'Subsidised'],
+      [tr('doctor').toLowerCase(), 'Doctor'],
+      [tr('nurse').toLowerCase(), 'Nurse'],
+      [tr('right').toLowerCase(), 'Right'],
+      [tr('left').toLowerCase(), 'Left'],
+    ]
+
+    for (const option of paymentOptionsLocalized) {
+      localizedPairs.push([option.label.toLowerCase(), option.value])
+    }
+
+    for (const [label, canonical] of localizedPairs) {
+      if (lower === label) return canonical
+    }
+    return text
+  }
 
   const scrollToTop = () => topRef.current?.scrollIntoView({ behavior: 'smooth' })
 
@@ -131,42 +162,136 @@ export default function ChatWindow({ onBack }) {
   }
   const removeMsg = (id) => setMessages(prev => prev.filter(msg => msg.id !== id))
 
-  const handleQuickReply = (label) => {
-    addMsg({ role: 'user', type: 'text', content: label })
+  const handleQuickReply = async (actionId, displayLabel) => {
+    const quickReplyText = {
+      general_enquiry: 'General Enquiry',
+      pre_procedure: 'Fill up IVT Pre-Procedure Acknowledgement Form',
+      post_operation: 'View Post-IVT Advice Form',
+      appointment: 'Book Appointment',
+      return_menu: 'Return Menu',
+    }
+    addMsg({ role: 'user', type: 'text', content: displayLabel || quickReplyText[actionId] || String(actionId || '') })
 
-    if (label === 'General Enquiry') {
+    const resetTransientFlowState = () => {
+      setRegStep(null)
+      setRegData({ patient_id: '', patient_name: '', patient_dob: '', phone_number: '' })
+      setFormAnswers(INIT_FORM)
+    }
+
+    const resolvePatientContext = async () => {
+      let patientName = epicRecord?.record_name || null
+      let resolvedEpicRecord = epicRecord
+
+      if (currentPatientId && !patientName) {
+        try {
+          const { data: patient } = await getPatient(currentPatientId)
+          patientName = patient?.patient_name || patientName
+        } catch {
+          /* keep fallback below */
+        }
+      }
+
+      if (currentPatientId && !resolvedEpicRecord) {
+        try {
+          const { data: rec } = await getEpicRecord(currentPatientId)
+          resolvedEpicRecord = rec
+          setEpicRecord(rec)
+          patientName = patientName || rec?.record_name || null
+        } catch {
+          /* EPIC record may not exist for all patients */
+        }
+      }
+
+      return {
+        patientName: patientName || currentPatientId || 'Patient',
+        resolvedEpicRecord,
+      }
+    }
+
+    const continueWithExistingLogin = async (clinicalActionId) => {
+      if (!currentPatientId) return false
+
+      resetTransientFlowState()
+      setLoading(true)
+      try {
+        const { patientName, resolvedEpicRecord } = await resolvePatientContext()
+
+        if (clinicalActionId === 'pre_procedure') {
+          setMode('pre_procedure')
+          setPreProcStep('ask_update')
+          addMsg({ role: 'bot', type: 'text', content: tr('proceedForm') })
+          addMsg({ role: 'bot', type: 'text', content: formatCopy(tr('welcomeBackPreProc'), { patientName }) })
+          addMsg({ role: 'bot', type: 'text', content: tr('updateInfo') })
+          return true
+        }
+
+        if (clinicalActionId === 'post_operation') {
+          setMode('post_operation')
+          let postOpRecord = resolvedEpicRecord
+          try {
+            const { data: latest } = await getLatestAcknowledgement(currentPatientId)
+            postOpRecord = { ...(postOpRecord || {}), ...latest }
+          } catch {
+            /* no prior acknowledgement */
+          }
+          if (postOpRecord) {
+            setEpicRecord(postOpRecord)
+          }
+          addMsg({ role: 'bot', type: 'text', content: formatCopy(tr('welcomeBackPostOp'), { patientName }) })
+          addMsg({ role: 'bot', type: 'postop_doc', content: '', formData: postOpRecord || null })
+          setPostOpStep('complete')
+          return true
+        }
+
+        if (clinicalActionId === 'appointment') {
+          setMode('appointment')
+          addMsg({ role: 'bot', type: 'text', content: formatCopy(tr('welcomeBackAppointment'), { patientName }) })
+          addMsg({ role: 'bot', type: 'appointment_picker', content: '' })
+          setAppointmentStep('picker')
+          return true
+        }
+      } finally {
+        setLoading(false)
+      }
+
+      return false
+    }
+
+    if (actionId === 'general_enquiry') {
       setMode('general_enquiry')
       addMsg({
         role: 'bot',
         type: 'text',
         content: "Sure, I can help answer general enquiries about eye procedures or surgery.\n\n**Disclaimer:**\nThis chatbot provides general information only and cannot replace your doctor's clinical advice, diagnosis, or treatment plan.\nIt is not intended to replace standard medical care.\nIf you have urgent or worsening symptoms, please seek immediate medical attention.",
       })
-    } else if (PREPROC_LABELS.includes(label)) {
+    } else if (actionId === 'pre_procedure') {
+      if (await continueWithExistingLogin('pre_procedure')) return
       setMode('pre_procedure')
       setPreProcStep('login')
       setFormAnswers(INIT_FORM)
-      addMsg({ role: 'bot', type: 'text', content: 'To proceed with the form, would you please sign in below?' })
+      addMsg({ role: 'bot', type: 'text', content: tr('proceedForm') })
       addMsg({ role: 'bot', type: 'singpass', content: '' })
-    } else if (POSTOP_LABELS.includes(label)) {
+    } else if (actionId === 'post_operation') {
+      if (await continueWithExistingLogin('post_operation')) return
       setMode('post_operation')
       setPostOpStep('login')
-      addMsg({ role: 'bot', type: 'text', content: 'To proceed with the checklist, would you please sign in below?' })
+      addMsg({ role: 'bot', type: 'text', content: tr('proceedChecklist') })
       addMsg({ role: 'bot', type: 'singpass', content: '' })
-    } else if (APPOINTMENT_LABELS.includes(label)) {
+    } else if (actionId === 'appointment') {
+      if (await continueWithExistingLogin('appointment')) return
       setMode('appointment')
       setAppointmentStep('login')
-      addMsg({ role: 'bot', type: 'text', content: 'To book an appointment, would you please sign in below?' })
+      addMsg({ role: 'bot', type: 'text', content: tr('proceedAppointment') })
       addMsg({ role: 'bot', type: 'singpass', content: '' })
-    } else if (label === 'Return Menu') {
+    } else if (actionId === 'return_menu') {
       setMode('welcome')
       setPreProcStep('login')
       setPostOpStep('login')
       setAppointmentStep('login')
       setFormAnswers(INIT_FORM)
-      setEpicRecord(null)
-      setCurrentPatientId(null)
       setRegStep(null)
       setRegData({ patient_id: '', patient_name: '', patient_dob: '', phone_number: '' })
+      // Keep login in memory until refresh; add a dedicated logout control later.
       // Re-shown welcome bubbles keep the Return Menu pill; the very first one
       // (INIT_MESSAGES) omits it since you're already at the menu.
       addMsg({ role: 'bot', type: 'welcome', content: '', includeReturnMenu: true })
@@ -179,7 +304,7 @@ export default function ChatWindow({ onBack }) {
     const formatted = `${day} ${period}`
     const patientName = epicRecord?.record_name || regData.patient_name || 'Patient'
 
-    addMsg({ role: 'user', type: 'text', content: `Preferred appointment slot: ${formatted}` })
+    addMsg({ role: 'user', type: 'text', content: formatCopy(tr('appointmentUserSlot'), { formatted }) })
     setLoading(true)
     try {
       await enqueueAppointmentNotification({
@@ -191,9 +316,9 @@ export default function ChatWindow({ onBack }) {
         clinic_name: 'TTSH Eye Clinic',
         requested_by: 'chatbot',
       })
-      addMsg({ role: 'bot', type: 'text', content: `Thanks. Your preferred slot (${formatted}) has been received. Our clinic staff will contact you to confirm availability.` })
+      addMsg({ role: 'bot', type: 'text', content: formatCopy(tr('appointmentConfirmed'), { formatted }) })
     } catch {
-      addMsg({ role: 'bot', type: 'text', content: 'Sorry, we could not submit your appointment request right now. Please try again shortly.' })
+      addMsg({ role: 'bot', type: 'text', content: tr('appointmentSubmitError') })
     } finally {
       setLoading(false)
     }
@@ -201,7 +326,7 @@ export default function ChatWindow({ onBack }) {
   }
 
   const handleSingpassLogin = async (patientId) => {
-    addMsg({ role: 'user', type: 'text', content: `Logged in as ${patientId}` })
+    addMsg({ role: 'user', type: 'text', content: formatCopy(tr('loggedInAs'), { patientId }) })
     setCurrentPatientId(patientId)
     setLoading(true)
     try {
@@ -248,23 +373,23 @@ export default function ChatWindow({ onBack }) {
           setEpicRecord(epicRec)
         }
         if (mode === 'post_operation') {
-          addMsg({ role: 'bot', type: 'text', content: `Welcome back, ${patientName}. Here is your post-operation checklist.` })
+          addMsg({ role: 'bot', type: 'text', content: formatCopy(tr('welcomeBackPostOp'), { patientName }) })
           addMsg({ role: 'bot', type: 'postop_doc', content: '', formData: epicRec })
           setPostOpStep('complete')
         } else if (mode === 'appointment') {
-          addMsg({ role: 'bot', type: 'text', content: `Welcome back, ${patientName}. Please share your preferred appointment day (Monday to Friday) and period (AM or PM).` })
+          addMsg({ role: 'bot', type: 'text', content: formatCopy(tr('welcomeBackAppointment'), { patientName }) })
           addMsg({ role: 'bot', type: 'appointment_picker', content: '' })
           setAppointmentStep('picker')
         } else {
-          addMsg({ role: 'bot', type: 'text', content: `Welcome back, ${patientName}. We will now proceed with the form.` })
-          addMsg({ role: 'bot', type: 'text', content: 'Would you like to update your information?\n• Yes / No' })
+          addMsg({ role: 'bot', type: 'text', content: formatCopy(tr('welcomeBackPreProc'), { patientName }) })
+          addMsg({ role: 'bot', type: 'text', content: tr('updateInfo') })
           setPreProcStep('ask_update')
         }
       } else {
         // New patient — start registration
         setRegData({ patient_id: patientId, patient_name: '', patient_dob: '', phone_number: '' })
         setRegStep('name')
-        addMsg({ role: 'bot', type: 'text', content: `We couldn't find an existing record for ${patientId}. Let's set up your profile.\n\nWhat is your full name?` })
+        addMsg({ role: 'bot', type: 'text', content: formatCopy(tr('profileNotFound'), { patientId }) })
       }
     } finally {
       setLoading(false)
@@ -277,19 +402,20 @@ export default function ChatWindow({ onBack }) {
 
     if (regStep === 'name') {
       const name = text.trim()
+      const validNamePattern = /^[A-Za-z .'-]{1,255}$/
       // TBL_PATIENT.patient_name is varchar(255)
-      if (!name || name.length > 255) {
-        addMsg({ role: 'bot', type: 'text', content: 'Please enter a valid name (1–255 characters).\n\nWhat is your full name?' })
+      if (!validNamePattern.test(name) || !/[A-Za-z]/.test(name)) {
+        addMsg({ role: 'bot', type: 'text', content: tr('invalidName') })
         return
       }
       setRegData(prev => ({ ...prev, patient_name: name }))
       setRegStep('dob')
-      addMsg({ role: 'bot', type: 'text', content: 'What is your date of birth? (DD-MM-YYYY, e.g. 01-01-1990)' })
+      addMsg({ role: 'bot', type: 'text', content: tr('askDob') })
     } else if (regStep === 'dob') {
       const dob = text.trim()
       const m = dob.match(/^(\d{2})-(\d{2})-(\d{4})$/)
       if (!m) {
-        addMsg({ role: 'bot', type: 'text', content: 'Please enter your date of birth in DD-MM-YYYY format (e.g. 01-01-1990).' })
+        addMsg({ role: 'bot', type: 'text', content: tr('invalidDobFormat') })
         return
       }
       const dd = parseInt(m[1], 10)
@@ -297,17 +423,17 @@ export default function ChatWindow({ onBack }) {
       const yyyy = parseInt(m[3], 10)
       const currentYear = new Date().getFullYear()
       if (mm < 1 || mm > 12 || dd < 1 || dd > 31 || yyyy < 1900 || yyyy > currentYear) {
-        addMsg({ role: 'bot', type: 'text', content: "That date doesn't look right. Please enter a valid date in DD-MM-YYYY format (e.g. 01-01-1990)." })
+        addMsg({ role: 'bot', type: 'text', content: tr('invalidDobValue') })
         return
       }
       setRegData(prev => ({ ...prev, patient_dob: dob }))
       setRegStep('phone')
-      addMsg({ role: 'bot', type: 'text', content: 'What is your phone number? (digits only, may start with +, up to 20 characters)' })
+      addMsg({ role: 'bot', type: 'text', content: tr('askPhone') })
     } else if (regStep === 'phone') {
       const phone = text.trim()
       // TBL_PATIENT.phone_number is varchar(20); allow optional leading '+'
       if (!/^\+?\d+$/.test(phone) || phone.length > 20) {
-        addMsg({ role: 'bot', type: 'text', content: 'Please enter a valid phone number (digits only, may start with +, up to 20 characters).' })
+        addMsg({ role: 'bot', type: 'text', content: tr('invalidPhone') })
         return
       }
       const finalData = { ...regData, phone_number: phone }
@@ -317,21 +443,21 @@ export default function ChatWindow({ onBack }) {
         setRegStep(null)
         // Set epicRecord so subsequent buildPayload and post-op use the correct patient_id
         setEpicRecord({ patient_id: finalData.patient_id, record_name: finalData.patient_name })
-        addMsg({ role: 'bot', type: 'text', content: `Thank you, ${finalData.patient_name}! Your profile has been created.` })
+        addMsg({ role: 'bot', type: 'text', content: formatCopy(tr('profileCreated'), { patientName: finalData.patient_name }) })
         if (mode === 'post_operation') {
-          addMsg({ role: 'bot', type: 'text', content: 'Here is your post-operation checklist.' })
+          addMsg({ role: 'bot', type: 'text', content: tr('postOpChecklist') })
           addMsg({ role: 'bot', type: 'postop_doc', content: '', formData: null })
           setPostOpStep('complete')
         } else if (mode === 'appointment') {
-          addMsg({ role: 'bot', type: 'text', content: 'Please share your preferred appointment day (Monday to Friday) and period (AM or PM).' })
+          addMsg({ role: 'bot', type: 'text', content: tr('appointmentPrompt') })
           addMsg({ role: 'bot', type: 'appointment_picker', content: '' })
           setAppointmentStep('picker')
         } else {
-          addMsg({ role: 'bot', type: 'text', content: 'We will now proceed with the form.\n\nHave you had a recent stroke or heart attack in the past 6 months?\n• Yes / No' })
+          addMsg({ role: 'bot', type: 'text', content: `We will now proceed with the form.\n\n${tr('qStroke')}` })
           setPreProcStep('q_stroke')
         }
       } catch {
-        addMsg({ role: 'bot', type: 'text', content: 'Sorry, there was an error saving your profile. Please try again.' })
+        addMsg({ role: 'bot', type: 'text', content: tr('profileSaveError') })
       } finally {
         setLoading(false)
       }
@@ -341,11 +467,11 @@ export default function ChatWindow({ onBack }) {
   const handlePreProcAnswer = async (text) => {
     setInput('')
     addMsg({ role: 'user', type: 'text', content: text })
-    const lower = text.toLowerCase().trim()
+    const lower = normalizeInput(text).toLowerCase().trim()
 
     if (preProcStep === 'ask_update') {
       if (!lower.startsWith('y') && !lower.startsWith('n')) {
-        addMsg({ role: 'bot', type: 'text', content: 'Sorry, I didn\'t understand that. Please answer Yes or No.\n\nWould you like to update your information?\n• Yes / No' })
+        addMsg({ role: 'bot', type: 'text', content: `${tr('answerYesNo')}\n\n${tr('updateInfo')}` })
         return
       }
       if (lower.startsWith('n')) {
@@ -354,7 +480,7 @@ export default function ChatWindow({ onBack }) {
         try {
           const { data: latest } = await getLatestAcknowledgement(currentPatientId)
           setPreProcStep('complete')
-          addMsg({ role: 'bot', type: 'text', content: 'Here is your existing form.' })
+          addMsg({ role: 'bot', type: 'text', content: tr('existingFormIntro') })
           addMsg({
             role: 'bot',
             type: 'acknowledgement_doc',
@@ -392,7 +518,7 @@ export default function ChatWindow({ onBack }) {
         } catch {
           // No prior record saved — fall back to EPIC data
           setPreProcStep('complete')
-          addMsg({ role: 'bot', type: 'text', content: 'Here is your existing form.' })
+          addMsg({ role: 'bot', type: 'text', content: tr('existingFormIntro') })
           addMsg({
             role: 'bot',
             type: 'acknowledgement_doc',
@@ -432,7 +558,7 @@ export default function ChatWindow({ onBack }) {
         }
       } else {
         // Update — proceed to the acknowledgement-form questions
-        addMsg({ role: 'bot', type: 'text', content: 'Have you had a recent stroke or heart attack in the past 6 months?\n• Yes / No' })
+        addMsg({ role: 'bot', type: 'text', content: tr('qStroke') })
         setPreProcStep('q_stroke')
       }
       return
@@ -440,34 +566,34 @@ export default function ChatWindow({ onBack }) {
 
     if (preProcStep === 'q_stroke') {
       if (!lower.startsWith('y') && !lower.startsWith('n')) {
-        addMsg({ role: 'bot', type: 'text', content: 'Sorry, I didn\'t understand that. Please answer Yes or No.\n\nHave you had a recent stroke or heart attack in the past 6 months?\n• Yes / No' })
+        addMsg({ role: 'bot', type: 'text', content: `${tr('answerYesNo')}\n\n${tr('qStroke')}` })
         return
       }
       const val = lower.startsWith('y')
       setFormAnswers(prev => ({ ...prev, stroke_heartAtt_last6mths: val }))
-      addMsg({ role: 'bot', type: 'text', content: 'Have you been hospitalised in the past 3 months?\n• Yes / No' })
+      addMsg({ role: 'bot', type: 'text', content: tr('qAdmission') })
       setPreProcStep('q_admission')
     } else if (preProcStep === 'q_admission') {
       if (!lower.startsWith('y') && !lower.startsWith('n')) {
-        addMsg({ role: 'bot', type: 'text', content: 'Sorry, I didn\'t understand that. Please answer Yes or No.\n\nHave you been hospitalised in the past 3 months?\n• Yes / No' })
+        addMsg({ role: 'bot', type: 'text', content: `${tr('answerYesNo')}\n\n${tr('qAdmission')}` })
         return
       }
       const val = lower.startsWith('y')
       setFormAnswers(prev => ({ ...prev, last3mths_admission: val }))
-      addMsg({ role: 'bot', type: 'text', content: 'Are you on antibiotics?\n• Yes / No' })
+      addMsg({ role: 'bot', type: 'text', content: tr('qAntibiotics') })
       setPreProcStep('q_antibiotics')
     } else if (preProcStep === 'q_antibiotics') {
       if (!lower.startsWith('y') && !lower.startsWith('n')) {
-        addMsg({ role: 'bot', type: 'text', content: 'Sorry, I didn\'t understand that. Please answer Yes or No.\n\nAre you on antibiotics?\n• Yes / No' })
+        addMsg({ role: 'bot', type: 'text', content: `${tr('answerYesNo')}\n\n${tr('qAntibiotics')}` })
         return
       }
       const val = lower.startsWith('y')
       setFormAnswers(prev => ({ ...prev, taking_antibiotics: val }))
-      addMsg({ role: 'bot', type: 'text', content: 'Are you pregnant? (if applicable)\n• Yes / No' })
+      addMsg({ role: 'bot', type: 'text', content: tr('qPregnant') })
       setPreProcStep('q_pregnant')
     } else if (preProcStep === 'q_pregnant') {
       if (!lower.startsWith('y') && !lower.startsWith('n')) {
-        addMsg({ role: 'bot', type: 'text', content: 'Sorry, I didn\'t understand that. Please answer Yes or No.\n\nAre you pregnant? (if applicable)\n• Yes / No' })
+        addMsg({ role: 'bot', type: 'text', content: `${tr('answerYesNo')}\n\n${tr('qPregnant')}` })
         return
       }
       const val = lower.startsWith('y')
@@ -475,7 +601,7 @@ export default function ChatWindow({ onBack }) {
       // before confirming the treatment eye.
       const answered = { ...formAnswers, pregnant: val }
       setFormAnswers(answered)
-      addMsg({ role: 'bot', type: 'text', content: 'Thank you. Here is your Pre-Procedure Acknowledgement Form.' })
+      addMsg({ role: 'bot', type: 'text', content: tr('preProcFormIntro') })
       addMsg({
         role: 'bot',
         type: 'acknowledgement_doc',
@@ -489,17 +615,17 @@ export default function ChatWindow({ onBack }) {
           pregnant: answered.pregnant,
         }),
       })
-      addMsg({ role: 'bot', type: 'text', content: 'Would you like to proceed with financial counselling now?\n• Yes / No' })
+      addMsg({ role: 'bot', type: 'text', content: tr('qCounselling') })
       setPreProcStep('q_financial_counselling')
     } else if (preProcStep === 'q_financial_counselling') {
       if (!lower.startsWith('y') && !lower.startsWith('n')) {
-        addMsg({ role: 'bot', type: 'text', content: 'Sorry, I didn\'t understand that. Please answer Yes or No.\n\nWould you like to proceed with financial counselling now?\n• Yes / No' })
+        addMsg({ role: 'bot', type: 'text', content: `${tr('answerYesNo')}\n\n${tr('qCounselling')}` })
         return
       }
       if (lower.startsWith('n')) {
         setPreProcStep('complete')
         setLoading(true)
-        addMsg({ role: 'bot', type: 'text', content: "No problem. I've saved your acknowledgement — you may return to the menu when you're ready." })
+        addMsg({ role: 'bot', type: 'text', content: tr('noProblemSaved') })
         try {
           await submitAcknowledgement(buildPayload(formAnswers, epicRecord))
         } catch {
@@ -509,34 +635,34 @@ export default function ChatWindow({ onBack }) {
         }
         return
       }
-      addMsg({ role: 'bot', type: 'text', content: 'Are you under Private or Subsidised scheme?\n• Private / Subsidised' })
+      addMsg({ role: 'bot', type: 'text', content: tr('qScheme') })
       setPreProcStep('q_scheme')
     } else if (preProcStep === 'q_scheme') {
       const isPrivate = lower.includes('private')
       const isSubsidised = lower.includes('subsidised') || lower.includes('subsidized') || lower.includes('subsid')
       if (!isPrivate && !isSubsidised) {
-        addMsg({ role: 'bot', type: 'text', content: "Sorry, I didn't understand that. Please answer Private or Subsidised.\n\nAre you seeking treatment under Private or Subsidised scheme?" })
+        addMsg({ role: 'bot', type: 'text', content: `${tr('answerScheme')}\n\n${tr('qScheme')}` })
         return
       }
       const recordClass = isPrivate ? 'PTE' : 'SUB'
       setFormAnswers(prev => ({ ...prev, record_class: recordClass }))
-      addMsg({ role: 'bot', type: 'text', content: 'Is your procedure to be performed by Doctor or Nurse?\n• Doctor / Nurse' })
+      addMsg({ role: 'bot', type: 'text', content: tr('qPerformer') })
       setPreProcStep('q_performer')
     } else if (preProcStep === 'q_performer') {
       const isDoctor = lower.includes('doctor')
       const isNurse = lower.includes('nurse')
       if (!isDoctor && !isNurse) {
-        addMsg({ role: 'bot', type: 'text', content: "Sorry, I didn't understand that. Please answer Doctor or Nurse.\n\nWould you like your procedure to be performed by Doctor or Nurse?" })
+        addMsg({ role: 'bot', type: 'text', content: `${tr('answerPerformer')}\n\n${tr('qPerformer')}` })
         return
       }
       setFormAnswers(prev => ({ ...prev, record_performer: isDoctor ? 'Doctor' : 'Nurse' }))
-      addMsg({ role: 'bot', type: 'text', content: 'May I confirm your IVT treatment is for right eye or left eye?\n• Right / Left' })
+      addMsg({ role: 'bot', type: 'text', content: tr('qEye') })
       setPreProcStep('q_eye')
     } else if (preProcStep === 'q_eye') {
       const isRight = lower.includes('right') || lower.includes('od')
       const isLeft = lower.includes('left') || lower.includes('os')
       if (!isRight && !isLeft) {
-        addMsg({ role: 'bot', type: 'text', content: 'Sorry, I didn\'t understand that. Please answer Right or Left.\n\nMay I confirm your IVT treatment is for right eye or left eye?\n• Right / Left' })
+        addMsg({ role: 'bot', type: 'text', content: `${tr('answerEye')}\n\n${tr('qEye')}` })
         return
       }
       const eyes = isLeft ? 'OS' : 'OD'
@@ -566,16 +692,16 @@ export default function ChatWindow({ onBack }) {
         addMsg({
           role: 'bot',
           type: 'text',
-          content: 'I could not retrieve billing rates for this class and performer. Please contact the clinic billing desk or try again after pricing is configured.',
+          content: tr('billingUnavailable'),
         })
         return
       }
       setFormAnswers(updated)
       setPreProcStep('cost_confirm')
-      addMsg({ role: 'bot', type: 'text', content: `The total cost of the procedure will be ${formatRangeWithCurrency(updated.estimated_cost_range)}, do you want to proceed?\n• Yes / No` })
+      addMsg({ role: 'bot', type: 'text', content: formatCopy(tr('costConfirm'), { cost: formatRangeWithCurrency(updated.estimated_cost_range) }) })
     } else if (preProcStep === 'cost_confirm') {
       if (!lower.startsWith('y') && !lower.startsWith('n')) {
-        addMsg({ role: 'bot', type: 'text', content: `Sorry, I didn't understand that. Please answer Yes or No.\n\nThe total cost of the procedure will be ${formatRangeWithCurrency(formAnswers.estimated_cost_range)}, do you want to proceed?` })
+        addMsg({ role: 'bot', type: 'text', content: formatCopy(tr('costConfirmInvalid'), { cost: formatRangeWithCurrency(formAnswers.estimated_cost_range) }) })
         return
       }
       if (lower.startsWith('n')) {
@@ -585,7 +711,7 @@ export default function ChatWindow({ onBack }) {
         // the cost just ends the flow. The answers are still persisted so they aren't lost.
         setPreProcStep('complete')
         setLoading(true)
-        addMsg({ role: 'bot', type: 'text', content: "Understood. I've saved your acknowledgement — you may return to the menu when you're ready." })
+        addMsg({ role: 'bot', type: 'text', content: tr('understoodSaved') })
         try {
           await submitAcknowledgement(buildPayload(formAnswers, epicRecord))
         } catch {
@@ -596,7 +722,8 @@ export default function ChatWindow({ onBack }) {
         return
       }
       setPreProcStep('payment_mode')
-      addMsg({ role: 'bot', type: 'text', content: 'Please choose your payment mode:\n• Medishield Life / Integrated Plan\n• CSC\n• Medisave (Self)\n• MAF\n• Cash\n• NOK Medisave' })
+      const paymentList = paymentOptionsLocalized.map((option) => `• ${option.label}`).join('\n')
+      addMsg({ role: 'bot', type: 'text', content: `${tr('qPayment')}\n${paymentList}` })
     } else if (preProcStep === 'payment_mode') {
       const isNok = lower.includes('nok') || lower.includes('next-of-kin') || lower.includes('next of kin')
       const isMedisaveSelf = (lower.includes('medisave') && !isNok) || lower.includes('self')
@@ -605,7 +732,7 @@ export default function ChatWindow({ onBack }) {
       const isMaf = lower === 'maf' || lower.includes('maf')
       const isCash = lower === 'cash' || lower.includes('cash')
       if (!isNok && !isMedisaveSelf && !isMediShield && !isCsc && !isMaf && !isCash) {
-        addMsg({ role: 'bot', type: 'text', content: "Sorry, I didn't understand that. Please choose one: Medishield Life / Integrated Plan, CSC, Medisave (Self), MAF, Cash, or NOK Medisave." })
+        addMsg({ role: 'bot', type: 'text', content: tr('answerPayment') })
         return
       }
       const paymentMode = isNok
@@ -623,7 +750,7 @@ export default function ChatWindow({ onBack }) {
       setFormAnswers(updated)
       setPreProcStep('complete')
       setLoading(true)
-      addMsg({ role: 'bot', type: 'text', content: 'Thank you. Here is your Financial Counselling & Advice Form.' })
+      addMsg({ role: 'bot', type: 'text', content: tr('financialDocIntro') })
       try {
         const res = await submitAcknowledgement(buildPayload(updated, epicRecord))
         const record = res.data.record
@@ -806,6 +933,7 @@ export default function ChatWindow({ onBack }) {
               onQuickReply={handleQuickReply}
               onSingpassLogin={handleSingpassLogin}
               onAppointmentSubmit={handleAppointmentSubmit}
+              language={language}
             />
           ))}
           {loading && showThinkingBubble && (
@@ -826,41 +954,38 @@ export default function ChatWindow({ onBack }) {
           <div style={{ ...centered, display: 'flex', gap: '8px', padding: '10px 20px', flexWrap: 'wrap' }}>
             {showYesNo && (
               <>
-                <button onClick={() => handlePreProcAnswer('Yes')} style={chipBtn}>Yes</button>
-                <button onClick={() => handlePreProcAnswer('No')} style={chipBtn}>No</button>
+                <button onClick={() => handlePreProcAnswer(tr('yes'))} style={chipBtn}>{tr('yes')}</button>
+                <button onClick={() => handlePreProcAnswer(tr('no'))} style={chipBtn}>{tr('no')}</button>
               </>
             )}
             {showScheme && (
               <>
-                <button onClick={() => handlePreProcAnswer('Private')} style={chipBtn}>Private</button>
-                <button onClick={() => handlePreProcAnswer('Subsidised')} style={chipBtn}>Subsidised</button>
+                <button onClick={() => handlePreProcAnswer(tr('private'))} style={chipBtn}>{tr('private')}</button>
+                <button onClick={() => handlePreProcAnswer(tr('subsidised'))} style={chipBtn}>{tr('subsidised')}</button>
               </>
             )}
             {showPerformer && (
               <>
-                <button onClick={() => handlePreProcAnswer('Doctor')} style={chipBtn}>Doctor</button>
-                <button onClick={() => handlePreProcAnswer('Nurse')} style={chipBtn}>Nurse</button>
+                <button onClick={() => handlePreProcAnswer(tr('doctor'))} style={chipBtn}>{tr('doctor')}</button>
+                <button onClick={() => handlePreProcAnswer(tr('nurse'))} style={chipBtn}>{tr('nurse')}</button>
               </>
             )}
             {showEye && (
               <>
-                <button onClick={() => handlePreProcAnswer('Right')} style={chipBtn}>Right</button>
-                <button onClick={() => handlePreProcAnswer('Left')} style={chipBtn}>Left</button>
+                <button onClick={() => handlePreProcAnswer(tr('right'))} style={chipBtn}>{tr('right')}</button>
+                <button onClick={() => handlePreProcAnswer(tr('left'))} style={chipBtn}>{tr('left')}</button>
               </>
             )}
             {showPaymentMode && (
               <>
-                <button onClick={() => handlePreProcAnswer('Medishield Life / Integrated Plan')} style={chipBtn}>Medishield Life / Integrated Plan</button>
-                <button onClick={() => handlePreProcAnswer('CSC')} style={chipBtn}>CSC</button>
-                <button onClick={() => handlePreProcAnswer('Medisave (Self)')} style={chipBtn}>Medisave (Self)</button>
-                <button onClick={() => handlePreProcAnswer('MAF')} style={chipBtn}>MAF</button>
-                <button onClick={() => handlePreProcAnswer('Cash')} style={chipBtn}>Cash</button>
-                <button onClick={() => handlePreProcAnswer('NOK Medisave')} style={chipBtn}>NOK Medisave</button>
+                {paymentOptionsLocalized.map((payment) => (
+                  <button key={payment.value} onClick={() => handlePreProcAnswer(payment.label)} style={chipBtn}>{payment.label}</button>
+                ))}
               </>
             )}
             {showReturnMenu && (
-              <button onClick={() => handleQuickReply('Return Menu')} style={{ ...chipBtn, background: '#3B6EF8', color: '#fff' }}>
-                Return Menu
+              <button onClick={() => handleQuickReply('return_menu')} style={{ ...chipBtn, background: '#3B6EF8', color: '#fff' }}>
+                {tr('returnMenu')}
               </button>
             )}
           </div>

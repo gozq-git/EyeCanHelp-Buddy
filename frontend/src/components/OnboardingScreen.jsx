@@ -43,7 +43,14 @@ function RobotIllustration() {
   )
 }
 
-export default function OnboardingScreen({ onContinue }) {
+const LANGUAGES = [
+  { value: 'en', label: 'English' },
+  { value: 'zh', label: '中文' },
+  { value: 'ms', label: 'Bahasa Melayu' },
+  { value: 'ta', label: 'தமிழ்' },
+]
+
+export default function OnboardingScreen({ onContinue, language = 'en', onLanguageChange }) {
   return (
     <div style={{
       height: '100%',
@@ -55,10 +62,10 @@ export default function OnboardingScreen({ onContinue }) {
     }}>
       <div style={{ width: '100%', maxWidth: '560px', padding: '52px 32px 0', textAlign: 'center' }}>
         <h1 style={{ color: '#3B6EF8', fontSize: '26px', fontWeight: 700, margin: '0 0 14px' }}>
-          You AI Assistant
+          EyeCanHelp Buddy
         </h1>
         <p style={{ color: '#888', fontSize: '14px', lineHeight: '1.7', margin: 0, maxWidth: '260px', marginLeft: 'auto', marginRight: 'auto' }}>
-          Using this software, you can ask questions and receive answers using artificial intelligence assistant
+          Chat with your healthcare assistant for general enquiry, form guidance, and post-care support
         </p>
       </div>
 
@@ -67,6 +74,46 @@ export default function OnboardingScreen({ onContinue }) {
       </div>
 
       <div style={{ width: '100%', maxWidth: '560px', padding: '24px' }}>
+        <label style={{ display: 'block', fontSize: '14px', color: '#555', marginBottom: '8px', fontWeight: 600 }}>
+          Preferred language
+        </label>
+        <div
+          role="group"
+          aria-label="Preferred language"
+          style={{
+            display: 'flex',
+            gap: '8px',
+            marginBottom: '12px',
+            flexWrap: 'wrap',
+          }}
+        >
+          {LANGUAGES.map((lang) => {
+            const isActive = language === lang.value
+
+            return (
+              <button
+                key={lang.value}
+                type="button"
+                onClick={() => onLanguageChange?.(lang.value)}
+                aria-pressed={isActive}
+                style={{
+                  flex: '1 1 120px',
+                  minWidth: 0,
+                  padding: '10px 12px',
+                  borderRadius: '12px',
+                  border: isActive ? '1px solid #3B6EF8' : '1px solid #D8D8D8',
+                  background: isActive ? '#EEF3FF' : '#fff',
+                  color: isActive ? '#2E5FE6' : '#333',
+                  fontSize: '14px',
+                  fontWeight: isActive ? 700 : 500,
+                  cursor: 'pointer',
+                }}
+              >
+                {lang.label}
+              </button>
+            )
+          })}
+        </div>
         <button
           onClick={onContinue}
           style={{

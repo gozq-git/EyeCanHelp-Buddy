@@ -5,6 +5,7 @@ import ChatWindow from './components/ChatWindow'
 
 export default function App() {
   const [screen, setScreen] = useState('splash')
+  const [language, setLanguage] = useState('en')
 
   return (
     <div style={{
@@ -19,10 +20,14 @@ export default function App() {
         <SplashScreen onDone={() => setScreen('onboarding')} />
       )}
       {screen === 'onboarding' && (
-        <OnboardingScreen onContinue={() => setScreen('chat')} />
+        <OnboardingScreen
+          language={language}
+          onLanguageChange={setLanguage}
+          onContinue={() => setScreen('chat')}
+        />
       )}
       {screen === 'chat' && (
-        <ChatWindow onBack={() => setScreen('onboarding')} />
+        <ChatWindow onBack={() => setScreen('onboarding')} language={language} />
       )}
     </div>
   )
