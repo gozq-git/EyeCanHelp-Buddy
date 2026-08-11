@@ -4,9 +4,9 @@ import { describe, it, expect, vi } from 'vitest'
 import OnboardingScreen from '../components/OnboardingScreen'
 
 describe('OnboardingScreen', () => {
-  it('renders the "You AI Assistant" heading', () => {
+  it('renders the "EyeCanHelp Buddy" heading', () => {
     render(<OnboardingScreen onContinue={() => {}} />)
-    expect(screen.getByRole('heading')).toHaveTextContent('You AI Assistant')
+    expect(screen.getByRole('heading')).toHaveTextContent('EyeCanHelp Buddy')
   })
 
   it('renders a Continue button', () => {

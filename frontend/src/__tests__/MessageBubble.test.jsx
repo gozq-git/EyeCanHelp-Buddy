@@ -22,15 +22,21 @@ describe('MessageBubble — welcome type', () => {
     const onQuickReply = vi.fn()
     render(<MessageBubble role="bot" type="welcome" content="" onQuickReply={onQuickReply} />)
     await userEvent.click(screen.getByRole('button', { name: 'General Enquiry' }))
-    expect(onQuickReply).toHaveBeenCalledWith('General Enquiry')
+    expect(onQuickReply).toHaveBeenCalledWith('general_enquiry', 'General Enquiry')
   })
 
   it('passes the correct label for each quick-reply option', async () => {
     const onQuickReply = vi.fn()
     render(<MessageBubble role="bot" type="welcome" content="" includeReturnMenu onQuickReply={onQuickReply} />)
-    for (const label of ['Fill up IVT Pre-Procedure Acknowledgement Form', 'View Post-IVT Advice Form', 'Return Menu']) {
+    const options = [
+      ['pre_procedure', 'Fill up IVT Pre-Procedure Acknowledgement Form'],
+      ['post_operation', 'View Post-IVT Advice Form'],
+      ['return_menu', 'Return Menu'],
+    ]
+
+    for (const [id, label] of options) {
       await userEvent.click(screen.getByRole('button', { name: label }))
-      expect(onQuickReply).toHaveBeenCalledWith(label)
+      expect(onQuickReply).toHaveBeenCalledWith(id, label)
     }
   })
 })
