@@ -29,7 +29,7 @@ describe('SingpassLoginButton', () => {
     render(<SingpassLoginButton onLogin={() => {}} />)
     typeUsername()
     act(() => { screen.getByRole('button').click() })
-    expect(screen.getByRole('button')).toHaveTextContent('Logging in…')
+    expect(screen.getByRole('button')).toHaveTextContent('Logging in...')
     expect(screen.getByRole('button')).toBeDisabled()
   })
 

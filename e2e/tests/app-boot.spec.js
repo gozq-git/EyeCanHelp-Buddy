@@ -6,7 +6,7 @@ test.describe('App boot flow', () => {
     await page.goto('/')
 
     // Onboarding appears after the 2s splash timer.
-    await expect(page.getByText(/You AI Assistant/i)).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByText(/EyeCanHelp Buddy/i)).toBeVisible({ timeout: 10_000 })
     await page.getByRole('button', { name: /Continue/ }).click()
 
     // Chat screen shows the four quick-reply pills.
