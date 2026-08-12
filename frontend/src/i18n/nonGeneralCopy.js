@@ -53,6 +53,11 @@ export const COPY = {
     right: 'Right',
     left: 'Left',
     returnMenu: 'Return Menu',
+    generalEnquiry: 'General Enquiry',
+    inputTypeYourAnswer: 'Type your answer…',
+    inputWriteYourAnswer: 'Write your answer…',
+    inputWriteYourMessage: 'Write your message…',
+    inputUseCalendarToChooseDateTime: 'Use the calendar to choose date and time',
   },
   zh: {
     proceedForm: '为继续填写表格，请先登录。',
@@ -108,6 +113,11 @@ export const COPY = {
     right: '右眼',
     left: '左眼',
     returnMenu: '返回菜单',
+    generalEnquiry: '一般咨询',
+    inputTypeYourAnswer: '请输入您的答案…',
+    inputWriteYourAnswer: '写下您的答案…',
+    inputWriteYourMessage: '写下您的消息…',
+    inputUseCalendarToChooseDateTime: '使用日历选择日期和时间',
   },
   ms: {
     proceedForm: 'Untuk meneruskan borang, sila log masuk dahulu.',
@@ -163,6 +173,11 @@ export const COPY = {
     right: 'Kanan',
     left: 'Kiri',
     returnMenu: 'Kembali ke Menu',
+    generalEnquiry: 'Pertanyaan Umum',
+    inputTypeYourAnswer: 'Taip jawapan anda…',
+    inputWriteYourAnswer: 'Tulis jawapan anda…',
+    inputWriteYourMessage: 'Tulis mesej anda…',
+    inputUseCalendarToChooseDateTime: 'Gunakan kalendar untuk memilih tarikh dan masa',
   },
   ta: {
     proceedForm: 'படிவத்தை தொடர உள்நுழையவும்.',
@@ -218,6 +233,11 @@ export const COPY = {
     right: 'வலது',
     left: 'இடது',
     returnMenu: 'மெனுவிற்கு திரும்பவும்',
+    generalEnquiry: 'பொது விசாரணை',
+    inputTypeYourAnswer: 'உங்கள் பதிலை உள்ளிடவும்…',
+    inputWriteYourAnswer: 'உங்கள் பதிலை எழுதவும்…',
+    inputWriteYourMessage: 'உங்கள் செய்தியை எழுதவும்…',
+    inputUseCalendarToChooseDateTime: 'தேதி மற்றும் நேரத்தை தேர்ந்தெடுக்க காலெடூட்டியைப் பயன்படுத்தவும்',
   },
 }
 

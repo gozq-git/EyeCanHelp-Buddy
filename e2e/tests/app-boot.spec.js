@@ -15,8 +15,8 @@ test.describe('App boot flow', () => {
     await expect(page.getByRole('button', { name: 'View Post-IVT Advice Form' })).toBeVisible()
   })
 
-  test('input shows the General Enquiry placeholder in welcome mode', async ({ page }) => {
+  test('input shows the localized welcome placeholder in welcome mode', async ({ page }) => {
     await gotoChat(page)
-    await expect(page.getByPlaceholder('General Enquiry')).toBeVisible()
+    await expect(page.getByPlaceholder('Write your message…')).toBeVisible()
   })
 })
