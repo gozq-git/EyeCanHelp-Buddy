@@ -95,9 +95,9 @@ describe('ChatWindow — welcome state', () => {
     expect(screen.queryByRole('button', { name: 'Return Menu' })).not.toBeInTheDocument()
   })
 
-  it('shows "General Enquiry" as the input placeholder in welcome mode', () => {
+  it('shows the localized welcome placeholder in welcome mode', () => {
     render(<ChatWindow />)
-    expect(screen.getByPlaceholderText('General Enquiry')).toBeInTheDocument()
+    expect(screen.getByPlaceholderText('Write your message…')).toBeInTheDocument()
   })
 
   it('input is enabled in welcome mode', () => {
@@ -126,10 +126,10 @@ describe('ChatWindow — General Enquiry flow', () => {
     expect(screen.getByText(/general enquiries about eye/i)).toBeInTheDocument()
   })
 
-  it('placeholder changes to "Write your message" in general enquiry mode', async () => {
+  it('placeholder stays localized in general enquiry mode', async () => {
     render(<ChatWindow />)
     await userEvent.click(screen.getByRole('button', { name: 'General Enquiry' }))
-    expect(screen.getByPlaceholderText('Write your message')).toBeInTheDocument()
+    expect(screen.getByPlaceholderText('Write your message…')).toBeInTheDocument()
   })
 
   it('user message appears in the chat after pressing Enter', async () => {

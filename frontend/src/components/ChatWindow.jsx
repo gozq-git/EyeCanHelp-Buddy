@@ -164,11 +164,11 @@ export default function ChatWindow({ onBack, language = 'en' }) {
 
   const handleQuickReply = async (actionId, displayLabel) => {
     const quickReplyText = {
-      general_enquiry: 'General Enquiry',
-      pre_procedure: 'Fill up IVT Pre-Procedure Acknowledgement Form',
-      post_operation: 'View Post-IVT Advice Form',
-      appointment: 'Book Appointment',
-      return_menu: 'Return Menu',
+      general_enquiry: tr('generalEnquiry') || 'General Enquiry',
+      pre_procedure: tr('preProcedurePrompt') || 'Fill up IVT Pre-Procedure Acknowledgement Form',
+      post_operation: tr('postOperationPrompt') || 'View Post-IVT Advice Form',
+      appointment: tr('bookAppointment') || 'Book Appointment',
+      return_menu: tr('returnMenu') || 'Return Menu',
     }
     addMsg({ role: 'user', type: 'text', content: displayLabel || quickReplyText[actionId] || String(actionId || '') })
 
@@ -891,11 +891,11 @@ export default function ChatWindow({ onBack, language = 'en' }) {
     || mode === 'appointment'
   )
 
-  const placeholder = regStep ? 'Type your answer…'
-    : mode === 'general_enquiry' ? 'Write your message'
-    : mode === 'appointment' ? 'Use the calendar to choose date and time'
-    : mode === 'pre_procedure' && !inputDisabled ? 'Write your answer…'
-    : 'General Enquiry'
+  const placeholder = regStep ? (tr('inputTypeYourAnswer') || 'Type your answer…')
+    : mode === 'general_enquiry' ? (tr('inputWriteYourMessage') || 'Write your message…')
+    : mode === 'appointment' ? (tr('inputUseCalendarToChooseDateTime') || 'Use the calendar to choose date and time')
+    : mode === 'pre_procedure' && !inputDisabled ? (tr('inputWriteYourAnswer') || 'Write your answer…')
+    : (tr('inputWriteYourMessage') || 'Write your message…')
 
   const centered = { maxWidth: '900px', margin: '0 auto', width: '100%' }
   const thinkingDots = '.'.repeat(streamHeartbeatCount)
