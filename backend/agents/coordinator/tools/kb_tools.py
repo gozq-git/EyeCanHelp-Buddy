@@ -86,7 +86,7 @@ def search_financial_kb(query: str, max_results: int = 5) -> List[Dict[str, Any]
     return results
 
 
-def format_kb_response(query: str, results: List[Dict[str, Any]]) -> str:
+def format_kb_response(results: List[Dict[str, Any]]) -> str:
     if not results:
         return (
             "I could not find relevant information in the TTSH Library for this request. "
@@ -117,7 +117,7 @@ def format_kb_response(query: str, results: List[Dict[str, Any]]) -> str:
     )
 
 
-def format_financial_kb_response(query: str, results: List[Dict[str, Any]]) -> str:
+def format_financial_kb_response(results: List[Dict[str, Any]]) -> str:
     if not results:
         return (
             "I could not find relevant information for this request. "

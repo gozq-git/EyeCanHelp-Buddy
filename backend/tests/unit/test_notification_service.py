@@ -78,8 +78,11 @@ def test_build_appointment_email_contains_slot_and_reference():
 @pytest.mark.asyncio
 async def test_send_appointment_notification_requires_sender(monkeypatch):
     monkeypatch.delenv("GMAIL_SENDER_EMAIL", raising=False)
+    request = _request()
+    service = _FakeGmailService(_FakeMessages())
+
     with pytest.raises(NotificationConfigError):
-        await send_appointment_notification_email(_request(), gmail_service=_FakeGmailService(_FakeMessages()))
+        await send_appointment_notification_email(request, gmail_service=service)
 
 
 @pytest.mark.asyncio
@@ -106,6 +109,7 @@ async def test_send_appointment_notification_failure_wrapped(monkeypatch):
     monkeypatch.setenv("GMAIL_SENDER_EMAIL", "eyecanhelpbuddy@gmail.com")
     monkeypatch.setenv("GMAIL_DESTINATION_EMAIL", "ops@example.com")
     service = _FakeGmailService(_FakeMessages(should_raise=True))
+    request = _request()
 
     with pytest.raises(NotificationDeliveryError):
-        await send_appointment_notification_email(_request(), gmail_service=service)
+        await send_appointment_notification_email(request, gmail_service=service)

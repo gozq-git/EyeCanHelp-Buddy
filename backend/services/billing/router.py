@@ -1,3 +1,5 @@
+from typing import Annotated
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -13,8 +15,18 @@ from .service import (
 router = APIRouter(prefix="/billing", tags=["Billing"])
 
 
-@router.post("/calculate", response_model=BillingResponse)
-async def calculate_billing(request: BillingRequest, db: AsyncSession = Depends(get_db)):
+@router.post(
+    "/calculate",
+    response_model=BillingResponse,
+    responses={
+        400: {"description": "Invalid billing class"},
+        404: {"description": "Billing price not configured"},
+    },
+)
+async def calculate_billing(
+    request: BillingRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
     class_code = (request.record_class or "").upper()
     performer = (request.performer or "").capitalize()
     try:

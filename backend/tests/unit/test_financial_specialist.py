@@ -109,7 +109,7 @@ def test_build_financial_prompt_uses_kb_results(monkeypatch):
     monkeypatch.setattr(
         financial,
         "format_financial_kb_response",
-        lambda _query, _results: "Information retrieved from the financial knowledge base:\n- Use a monthly 50/30/20 budget.",
+        lambda _results: "Information retrieved from the financial knowledge base:\n- Use a monthly 50/30/20 budget.",
     )
 
     prompt, results = financial._build_financial_prompt("How do I budget for medical bills?")

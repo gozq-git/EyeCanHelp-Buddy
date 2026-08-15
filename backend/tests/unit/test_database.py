@@ -131,9 +131,9 @@ class _FakeMotorClient:
 @pytest.fixture
 def fake_motor(monkeypatch):
     # Reset the module-level singleton and swap the Motor client for a fake.
+    # No teardown needed: monkeypatch undoes both patches after the test.
     monkeypatch.setattr(mongo, "_client", None)
     monkeypatch.setattr(mongo, "AsyncIOMotorClient", _FakeMotorClient)
-    yield
 
 
 def test_get_mongo_client_is_cached(fake_motor):

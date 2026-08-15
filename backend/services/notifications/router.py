@@ -10,7 +10,15 @@ from .service import (
 router = APIRouter(prefix="/notifications", tags=["Notifications"])
 
 
-@router.post("/appointments", response_model=AppointmentNotificationAccepted, status_code=200)
+@router.post(
+    "/appointments",
+    response_model=AppointmentNotificationAccepted,
+    status_code=200,
+    responses={
+        500: {"description": "Notification configuration error"},
+        502: {"description": "Unable to send appointment email"},
+    },
+)
 async def enqueue_appointment_notification(request: AppointmentNotificationRequest):
     try:
         result = await send_appointment_notification_email(request)

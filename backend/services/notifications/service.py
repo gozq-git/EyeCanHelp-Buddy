@@ -1,3 +1,4 @@
+import asyncio
 import base64
 import hashlib
 import os
@@ -39,10 +40,6 @@ def _build_idempotency_key(payload: AppointmentNotificationRequest) -> str:
         or f"{payload.patient_id}|{destination_email}|{payload.preferred_day}|{payload.preferred_period}"
     )
     return hashlib.sha256(source.encode("utf-8")).hexdigest()
-
-
-def _resolve_destination_email(payload: AppointmentNotificationRequest) -> str:
-    return _get_required_env("GMAIL_DESTINATION_EMAIL")
 
 
 def build_appointment_email(payload: AppointmentNotificationRequest, correlation_id: str) -> dict:
@@ -94,14 +91,19 @@ def _create_gmail_raw_message(*, sender: str, recipient: str, subject: str, text
     return base64.urlsafe_b64encode(msg.as_bytes()).decode("utf-8")
 
 
+def _send_gmail_raw_message(service, raw: str) -> dict:
+    return service.users().messages().send(userId="me", body={"raw": raw}).execute()
+
+
 async def send_appointment_notification_email(payload: AppointmentNotificationRequest, gmail_service=None) -> dict:
     sender_email = _get_required_env("GMAIL_SENDER_EMAIL")
-    destination_email = _resolve_destination_email(payload)
+    destination_email = _get_required_env("GMAIL_DESTINATION_EMAIL")
     correlation_id = _build_correlation_id(payload)
     _ = _build_idempotency_key(payload)
     email_payload = build_appointment_email(payload, correlation_id)
 
-    service = gmail_service or _build_gmail_service()
+    # Gmail API calls are blocking; run them off the event loop.
+    service = gmail_service or await asyncio.to_thread(_build_gmail_service)
     raw = _create_gmail_raw_message(
         sender=sender_email,
         recipient=destination_email,
@@ -110,7 +112,7 @@ async def send_appointment_notification_email(payload: AppointmentNotificationRe
     )
 
     try:
-        sent = service.users().messages().send(userId="me", body={"raw": raw}).execute()
+        sent = await asyncio.to_thread(_send_gmail_raw_message, service, raw)
     except HttpError as exc:
         raise NotificationDeliveryError(f"Failed to send Gmail message: {exc}") from exc
     except Exception as exc:

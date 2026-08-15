@@ -76,7 +76,7 @@ class _FakeAsyncSession:
 
 
 def test_get_mongo_client_is_cached(monkeypatch):
-    mongo._client = None
+    monkeypatch.setattr(mongo, '_client', None)
     monkeypatch.setattr(mongo, 'AsyncIOMotorClient', _FakeMotorClient)
 
     first = mongo.get_mongo_client()
@@ -86,7 +86,7 @@ def test_get_mongo_client_is_cached(monkeypatch):
 
 
 def test_close_mongo_client_resets_client(monkeypatch):
-    mongo._client = None
+    monkeypatch.setattr(mongo, '_client', None)
     monkeypatch.setattr(mongo, 'AsyncIOMotorClient', _FakeMotorClient)
 
     client = mongo.get_mongo_client()

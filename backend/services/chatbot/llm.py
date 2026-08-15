@@ -7,6 +7,13 @@ from collections.abc import AsyncIterator
 import boto3
 import httpx
 
+CONTENT_TYPE_JSON = "application/json"
+CONTENT_TYPE_SSE = "text/event-stream"
+SSE_DATA_PREFIX = "data: "
+
+# Keys a JSON coordinator response may carry the reply text under, in priority order.
+JSON_TEXT_KEYS = ("response", "result", "output")
+
 
 def _build_prompt(messages: list[dict]) -> str:
     # Convert chat history into a simple transcript expected by the coordinator runtime.
@@ -20,27 +27,34 @@ def _build_prompt(messages: list[dict]) -> str:
     return "\n".join(lines)
 
 
-def _extract_text(content_type: str, raw_text: str) -> str:
-    if "application/json" in content_type:
-        try:
-            parsed = json.loads(raw_text)
-            if isinstance(parsed, dict):
-                if "response" in parsed:
-                    return str(parsed["response"])
-                if "result" in parsed:
-                    return str(parsed["result"])
-                if "output" in parsed:
-                    return str(parsed["output"])
-            return raw_text
-        except json.JSONDecodeError:
-            return raw_text
+def _extract_json_text(raw_text: str) -> str:
+    try:
+        parsed = json.loads(raw_text)
+    except json.JSONDecodeError:
+        return raw_text
 
-    if "text/event-stream" in content_type:
-        chunks: list[str] = []
-        for line in raw_text.splitlines():
-            if line.startswith("data: "):
-                chunks.append(_decode_sse_payload(line[6:]))
-        return "\n".join(chunks).strip() or raw_text
+    if isinstance(parsed, dict):
+        for key in JSON_TEXT_KEYS:
+            if key in parsed:
+                return str(parsed[key])
+    return raw_text
+
+
+def _extract_sse_text(raw_text: str) -> str:
+    chunks = [
+        _decode_sse_payload(line[len(SSE_DATA_PREFIX):])
+        for line in raw_text.splitlines()
+        if line.startswith(SSE_DATA_PREFIX)
+    ]
+    return "\n".join(chunks).strip() or raw_text
+
+
+def _extract_text(content_type: str, raw_text: str) -> str:
+    if CONTENT_TYPE_JSON in content_type:
+        return _extract_json_text(raw_text)
+
+    if CONTENT_TYPE_SSE in content_type:
+        return _extract_sse_text(raw_text)
 
     return raw_text
 
@@ -56,21 +70,21 @@ def _extract_runtime_response(response: dict) -> str:
     content_type = str(response.get("contentType", ""))
     stream = response.get("response")
 
-    if "text/event-stream" in content_type and stream is not None:
+    if CONTENT_TYPE_SSE in content_type and stream is not None:
         chunks: list[str] = []
         for line in stream.iter_lines(chunk_size=10):
             if not line:
                 continue
             text = line.decode("utf-8")
-            if text.startswith("data: "):
+            if text.startswith(SSE_DATA_PREFIX):
                 text = _decode_sse_payload(text[6:])
             chunks.append(text)
         return "\n".join(chunks).strip()
 
-    if "application/json" in content_type and stream is not None:
+    if CONTENT_TYPE_JSON in content_type and stream is not None:
         chunks = [chunk.decode("utf-8") for chunk in stream]
         raw = "".join(chunks)
-        return _extract_text("application/json", raw).strip()
+        return _extract_text(CONTENT_TYPE_JSON, raw).strip()
 
     if stream is not None and hasattr(stream, "read"):
         return stream.read().decode("utf-8").strip()
@@ -121,42 +135,55 @@ def _chunk_text(text: str, chunk_size: int = 24) -> list[str]:
     return [text[i:i + chunk_size] for i in range(0, len(text), chunk_size)]
 
 
+async def _stream_sse_lines(stream) -> AsyncIterator[str]:
+    """Yield the decoded payload of every non-empty SSE line off the event loop."""
+    iterator = stream.iter_lines(chunk_size=10)
+    while True:
+        line = await asyncio.to_thread(_next_or_none, iterator)
+        if line is None:
+            break
+        text = _decode_chunk(line).strip()
+        if text.startswith(SSE_DATA_PREFIX):
+            text = _decode_sse_payload(text[len(SSE_DATA_PREFIX):])
+        if text:
+            yield text
+
+
+async def _collect_json_stream(stream) -> str:
+    """Drain a chunked JSON body and pull the reply text out of it."""
+    iterator = iter(stream)
+    pieces: list[str] = []
+    while True:
+        chunk = await asyncio.to_thread(_next_or_none, iterator)
+        if chunk is None:
+            break
+        pieces.append(_decode_chunk(chunk))
+    return _extract_text(CONTENT_TYPE_JSON, "".join(pieces)).strip()
+
+
+async def _read_whole_stream(stream) -> str:
+    raw = await asyncio.to_thread(stream.read)
+    return _decode_chunk(raw).strip() if raw else ""
+
+
 async def _stream_runtime_response(response: dict) -> AsyncIterator[str]:
     content_type = str(response.get("contentType", ""))
     stream = response.get("response")
-
-    if "text/event-stream" in content_type and stream is not None and hasattr(stream, "iter_lines"):
-        iterator = stream.iter_lines(chunk_size=10)
-        while True:
-            line = await asyncio.to_thread(_next_or_none, iterator)
-            if line is None:
-                break
-            text = _decode_chunk(line).strip()
-            if not text:
-                continue
-            if text.startswith("data: "):
-                text = _decode_sse_payload(text[6:])
-            if text:
-                yield text
+    if stream is None:
         return
 
-    if "application/json" in content_type and stream is not None and hasattr(stream, "__iter__"):
-        iterator = iter(stream)
-        pieces: list[str] = []
-        while True:
-            chunk = await asyncio.to_thread(_next_or_none, iterator)
-            if chunk is None:
-                break
-            pieces.append(_decode_chunk(chunk))
-        text = _extract_text("application/json", "".join(pieces)).strip()
-        for piece in _chunk_text(text):
+    if CONTENT_TYPE_SSE in content_type and hasattr(stream, "iter_lines"):
+        async for text in _stream_sse_lines(stream):
+            yield text
+        return
+
+    if CONTENT_TYPE_JSON in content_type and hasattr(stream, "__iter__"):
+        for piece in _chunk_text(await _collect_json_stream(stream)):
             yield piece
         return
 
-    if stream is not None and hasattr(stream, "read"):
-        raw = await asyncio.to_thread(stream.read)
-        text = _decode_chunk(raw).strip() if raw else ""
-        for piece in _chunk_text(text):
+    if hasattr(stream, "read"):
+        for piece in _chunk_text(await _read_whole_stream(stream)):
             yield piece
 
 
@@ -168,8 +195,8 @@ async def _invoke_with_runtime_arn_response(prompt: str, stream: bool = False) -
     region = os.getenv("AWS_REGION", "").strip() or _extract_region_from_arn(runtime_arn)
     session_id = os.getenv("AGENTCORE_RUNTIME_SESSION_ID", "").strip() or str(uuid.uuid4())
     payload = json.dumps({"prompt": prompt, "stream": stream}).encode("utf-8")
-    request_content_type = os.getenv("AGENTCORE_REQUEST_CONTENT_TYPE", "application/json")
-    response_accept = os.getenv("AGENTCORE_RESPONSE_ACCEPT", "text/event-stream")
+    request_content_type = os.getenv("AGENTCORE_REQUEST_CONTENT_TYPE", CONTENT_TYPE_JSON)
+    response_accept = os.getenv("AGENTCORE_RESPONSE_ACCEPT", CONTENT_TYPE_SSE)
 
     client = boto3.client("bedrock-agentcore", region_name=region)
     response = await asyncio.to_thread(
@@ -205,11 +232,11 @@ async def chat(messages: list[dict]) -> str:
     prompt = _build_prompt(messages)
 
     text = await _invoke_with_runtime_arn(prompt)
-    # if not text:
-    #     text = await _invoke_with_http_endpoint(prompt)
+    if not text:
+        text = await _invoke_with_http_endpoint(prompt)
 
-    # if not text:
-    #     return "No response returned from coordinator runtime."
+    if not text:
+        return "No response returned from coordinator runtime."
     return text
 
 
