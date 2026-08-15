@@ -25,6 +25,27 @@ app = BedrockAgentCoreApp()
 workflow = create_agent()
 
 
+async def _stream_specialist_response(query: str):
+    """Stream the routed specialist's tokens, or a single terminal message."""
+    state = route_request(query)
+    if state.get("route") == "escalate":
+        text = str(state.get("response", "")).strip()
+        if text:
+            yield text
+        return
+
+    route = str(state.get("route", "")).strip()
+    specialist = get_specialist_by_name(route)
+    if specialist is None:
+        yield f"I could not find a specialist for route: {route or 'unknown'}"
+        return
+
+    for token in specialist.handle_stream(state):
+        text = str(token)
+        if text:
+            yield text
+
+
 @app.entrypoint
 async def invoke(payload=None):
     try:
@@ -32,26 +53,7 @@ async def invoke(payload=None):
         stream = bool(payload.get("stream", False)) if payload else False
 
         if stream:
-            async def stream_response():
-                state = route_request(query)
-                if state.get("route") == "escalate":
-                    text = str(state.get("response", "")).strip()
-                    if text:
-                        yield text
-                    return
-
-                route = str(state.get("route", "")).strip()
-                specialist = get_specialist_by_name(route)
-                if specialist is None:
-                    yield f"I could not find a specialist for route: {route or 'unknown'}"
-                    return
-
-                for token in specialist.handle_stream(state):
-                    text = str(token)
-                    if text:
-                        yield text
-
-            return stream_response()
+            return _stream_specialist_response(query)
 
         response = workflow.invoke({"prompt": query})
         text = str(response.get("response", "")).strip()

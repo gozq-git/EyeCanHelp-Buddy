@@ -1,3 +1,5 @@
+from typing import Annotated
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,7 +16,11 @@ epic_router = APIRouter(prefix="/epic", tags=["EPIC"])
 patient_router = APIRouter(prefix="/patient", tags=["Patient"])
 
 
-@epic_router.get("/patient/{patient_id}", response_model=PatientSchema)
+@epic_router.get(
+    "/patient/{patient_id}",
+    response_model=PatientSchema,
+    responses={404: {"description": "Patient not found in EPIC"}},
+)
 async def get_epic_patient(patient_id: str):
     patient = await get_patient_from_epic(patient_id)
     if patient is None:
@@ -22,7 +28,11 @@ async def get_epic_patient(patient_id: str):
     return patient
 
 
-@epic_router.get("/patient/{patient_id}/record", response_model=PatientRecordResponse)
+@epic_router.get(
+    "/patient/{patient_id}/record",
+    response_model=PatientRecordResponse,
+    responses={404: {"description": "No EPIC record found for patient"}},
+)
 async def get_epic_patient_record(patient_id: str):
     record = await get_patient_record_from_epic(patient_id)
     if record is None:
@@ -30,8 +40,11 @@ async def get_epic_patient_record(patient_id: str):
     return record
 
 
-@patient_router.get("/{patient_id}")
-async def get_patient(patient_id: str, db: AsyncSession = Depends(get_db)):
+@patient_router.get(
+    "/{patient_id}",
+    responses={404: {"description": "Patient not found"}},
+)
+async def get_patient(patient_id: str, db: Annotated[AsyncSession, Depends(get_db)]):
     patient = await get_patient_by_id(patient_id, db)
     if not patient:
         raise HTTPException(status_code=404, detail="Patient not found")
@@ -47,7 +60,7 @@ async def get_patient(patient_id: str, db: AsyncSession = Depends(get_db)):
 
 
 @patient_router.post("")
-async def create_patient_record(data: PatientCreate, db: AsyncSession = Depends(get_db)):
+async def create_patient_record(data: PatientCreate, db: Annotated[AsyncSession, Depends(get_db)]):
     patient = await create_patient(data, db)
     return {
         "patient_id": patient.patient_id,

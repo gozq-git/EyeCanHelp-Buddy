@@ -22,6 +22,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from database.postgres import Base
 
 PATIENT_SCHEMA = "patient"
+GEN_RANDOM_UUID_SQL = "gen_random_uuid()"
 
 
 class Patient(Base):
@@ -75,7 +76,7 @@ class PatientDiagnosis(Base):
 		UUID(as_uuid=True),
 		primary_key=True,
 		default=uuid.uuid4,
-		server_default=text("gen_random_uuid()"),
+		server_default=text(GEN_RANDOM_UUID_SQL),
 	)
 	patient_id: Mapped[uuid.UUID] = mapped_column(
 		UUID(as_uuid=True),
@@ -105,7 +106,7 @@ class PatientIVT(Base):
 		UUID(as_uuid=True),
 		primary_key=True,
 		default=uuid.uuid4,
-		server_default=text("gen_random_uuid()"),
+		server_default=text(GEN_RANDOM_UUID_SQL),
 	)
 	patient_id: Mapped[uuid.UUID] = mapped_column(
 		UUID(as_uuid=True),
@@ -136,7 +137,7 @@ class InjectionSession(Base):
 		UUID(as_uuid=True),
 		primary_key=True,
 		default=uuid.uuid4,
-		server_default=text("gen_random_uuid()"),
+		server_default=text(GEN_RANDOM_UUID_SQL),
 	)
 	patient_ivt_id: Mapped[uuid.UUID] = mapped_column(
 		UUID(as_uuid=True),
@@ -164,7 +165,7 @@ class FormRecord(Base):
 		UUID(as_uuid=True),
 		primary_key=True,
 		default=uuid.uuid4,
-		server_default=text("gen_random_uuid()"),
+		server_default=text(GEN_RANDOM_UUID_SQL),
 	)
 	patient_id: Mapped[uuid.UUID] = mapped_column(
 		UUID(as_uuid=True),
@@ -189,7 +190,7 @@ class PatientAddress(Base):
 		UUID(as_uuid=True),
 		primary_key=True,
 		default=uuid.uuid4,
-		server_default=text("gen_random_uuid()"),
+		server_default=text(GEN_RANDOM_UUID_SQL),
 	)
 	patient_id: Mapped[uuid.UUID] = mapped_column(
 		UUID(as_uuid=True),

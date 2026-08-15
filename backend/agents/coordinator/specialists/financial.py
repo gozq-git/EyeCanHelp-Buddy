@@ -158,7 +158,7 @@ def _build_financial_prompt(query: str, prompt: str = ""):
     if any("error" in item for item in results if isinstance(item, dict)):
         return None, results
 
-    kb_context = format_financial_kb_response(retrieval_query, results)
+    kb_context = format_financial_kb_response(results)
     if not kb_context or "could not find relevant information" in kb_context.lower():
         return None, results
 

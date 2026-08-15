@@ -108,7 +108,7 @@ def test_build_healthcare_prompt_uses_rewritten_query_for_kb(monkeypatch):
     monkeypatch.setattr(
         healthcare,
         "format_kb_response",
-        lambda _query, _results: "Information retrieved from the TTSH Library:\n- Seek urgent care.",
+        lambda _results: "Information retrieved from the TTSH Library:\n- Seek urgent care.",
     )
 
     prompt, results = healthcare._build_healthcare_prompt("is that normal", prompt="")

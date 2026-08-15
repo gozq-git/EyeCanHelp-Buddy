@@ -1,9 +1,28 @@
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
+# Keep build contexts free of caches, secrets and test-only files so nothing
+# unintended reaches an image (Sonar docker:S6470).
+
+# Python bytecode / caches (patterns need ** to match nested directories)
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/*.pyd
 .Python
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
 .venv/
 venv/
+
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+
+# Test-only and reporting assets (not needed by any runtime image)
+tests/
+reports/
 *.log
-.pytest_cache/
