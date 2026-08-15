@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -36,7 +36,7 @@ class PatientRecordResponse(PatientRecordCreate):
     resourceType: str = "DiagnosticReport"
     record_id: str
     record_medication: str | None = None
-    issued: datetime = Field(default_factory=datetime.utcnow)
+    issued: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class IVTSchema(BaseModel):

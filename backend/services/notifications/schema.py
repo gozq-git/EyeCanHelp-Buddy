@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from pydantic import BaseModel, Field
 
 
@@ -18,7 +18,7 @@ class AppointmentNotificationAccepted(BaseModel):
     status: str = "sent"
     delivery_message_id: str
     correlation_id: str
-    sent_at: datetime = Field(default_factory=datetime.utcnow)
+    sent_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 __all__ = [
