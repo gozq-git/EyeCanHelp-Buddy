@@ -78,6 +78,40 @@ jobs:
             -Dsonar.python.coverage.reportPaths=backend/coverage.xml
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      - name: Export Sonar results to files
+        if: always()
+        shell: bash
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST: https://sonarcloud.io
+          SONAR_PROJECT: gozq-git_EyeCanHelp-Buddy
+        run: |
+          # SonarCloud processes the report asynchronously; give it a moment.
+          sleep 30
+          echo "Fetching open issues..."
+          curl -s -u "$SONAR_TOKEN:" \
+            "$SONAR_HOST/api/issues/search?componentKeys=$SONAR_PROJECT&resolved=false&ps=500" \
+            -o sonar-issues.json
+          echo "Fetching security hotspots..."
+          curl -s -u "$SONAR_TOKEN:" \
+            "$SONAR_HOST/api/hotspots/search?projectKey=$SONAR_PROJECT&ps=500" \
+            -o sonar-hotspots.json
+          echo "Fetching quality gate status..."
+          curl -s -u "$SONAR_TOKEN:" \
+            "$SONAR_HOST/api/qualitygates/project_status?projectKey=$SONAR_PROJECT" \
+            -o sonar-quality-gate.json
+          echo "=== Summary ==="
+          echo "Issues:   $(grep -o '"total":[0-9]*' sonar-issues.json | head -1)"
+          echo "Hotspots: $(grep -o '"total":[0-9]*' sonar-hotspots.json | head -1)"
+      - name: Upload Sonar report
+        uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: sonar-report
+          path: |
+            sonar-issues.json
+            sonar-hotspots.json
+            sonar-quality-gate.json
 
   #snyk-scan-BE:
   #  name: Snyk Scan BE (SCA & SAST)
