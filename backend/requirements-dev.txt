@@ -6,3 +6,10 @@ pytest-cov==6.0.0
 pytest-html==4.1.1
 aiosqlite==0.20.0      # in-memory SQLAlchemy engine for integration tests
 locust==2.32.5         # stress / load testing
+
+# Coordinator agent runtime deps. Not needed by the backend service itself, but
+# agents/coordinator/{agent,main}.py import them at module scope, so the unit
+# tests cannot exercise those modules without them. Keep in sync with
+# agents/coordinator/requirements.txt.
+langgraph>=0.2.0,<0.4.0
+bedrock-agentcore
