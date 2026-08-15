@@ -17,10 +17,13 @@ htmlcov/
 .venv/
 venv/
 
-# Secrets and local configuration
-.env
-.env.*
-!.env.example
+# NOTE: `.env` is deliberately NOT ignored. Both agents-cicd.yml and
+# backend-cicd.yml write the BACKEND_ENV_FILE secret to backend/.env before
+# building, and both images depend on that file being present for
+# `load_dotenv()` to configure them at startup (AWS_KNOWLEDGE_BASE_ID,
+# MEDICAL_HOTLINE_CONTACT, BEDROCK_MODEL_ID, ...). Excluding it silently
+# deploys an unconfigured coordinator. See §"env file" in SONAR_REMEDIATION.md
+# for the durable fix (supply these via the runtime's env config instead).
 
 # Test-only and reporting assets (not needed by any runtime image)
 tests/

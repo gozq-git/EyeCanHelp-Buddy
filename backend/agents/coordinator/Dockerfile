@@ -10,8 +10,14 @@ COPY agents/coordinator/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir --only-binary=:all: -r ./requirements.txt
 
 # Copy only the coordinator sources instead of the whole build context, so
-# secrets/tests/tooling can never leak into the image (Sonar docker:S6470)
+# tests/tooling cannot leak into the image (Sonar docker:S6470)
 COPY agents/coordinator/ ./agents/coordinator/
+
+# The CI workflow writes the BACKEND_ENV_FILE secret to backend/.env before
+# building; main.py's load_dotenv() needs it or the agent starts unconfigured
+# (no knowledge base, no hotline contact). The glob keeps local builds working
+# when .env is absent, since .env.example is always present.
+COPY .env* ./
 
 # Run as a non-root user (Sonar docker:S6471)
 RUN useradd --create-home --uid 10001 appuser \
