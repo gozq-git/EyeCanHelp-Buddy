@@ -29,6 +29,7 @@ jobs:
         run: |
           python -m pytest \
             --cov=services --cov=routers --cov=schemas --cov=models --cov=database \
+            --cov=agents \
             --cov-report=term-missing \
             --cov-report=html:../reports/backend/coverage \
             --html=../reports/backend/report.html --self-contained-html

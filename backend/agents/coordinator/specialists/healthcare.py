@@ -1,9 +1,8 @@
 """Healthcare specialist plug-in — RAG over the TTSH medical knowledge base."""
 import logging
-import os
 
 from llm import invoke_model, invoke_model_stream
-from specialists.base import CoordinatorState, Specialist
+from specialists import rag
 from specialists.registry import register
 from tools.kb_tools import format_kb_response, search_medical_kb
 
@@ -22,7 +21,7 @@ Always:
 - End with a short safety note for urgent symptoms.
 """
 
-_NO_INFO = "No information available."
+_NO_INFO = rag.NO_INFO
 
 _QUERY_REWRITE_SYSTEM_PROMPT = """You rewrite follow-up healthcare user messages into a standalone
 medical search query for retrieval.
@@ -34,179 +33,61 @@ Rules:
 - If the user input is already standalone, return it unchanged.
 """
 
-_AMBIGUOUS_HINTS = (
-    "this",
-    "that",
-    "it",
-    "normal",
-    "what about",
-    "how about",
-    "side effect",
-    "side effects",
+_PROFILE = rag.RagProfile(
+    env_prefix="HEALTHCARE",
+    rewrite_system_prompt=_QUERY_REWRITE_SYSTEM_PROMPT,
+    evidence_label="medical knowledge base",
+    log_label="Healthcare",
+    ambiguous_hints=(
+        "this",
+        "that",
+        "it",
+        "normal",
+        "what about",
+        "how about",
+        "side effect",
+        "side effects",
+    ),
 )
 
+_AMBIGUOUS_HINTS = _PROFILE.ambiguous_hints
 
-def _env_bool(name: str, default: bool = False) -> bool:
-    raw = os.getenv(name)
-    if raw is None:
-        return default
-    return raw.strip().lower() in {"1", "true", "yes", "on"}
-
-
-def _rewrite_word_threshold() -> int:
-    raw = os.getenv("HEALTHCARE_QUERY_REWRITE_MAX_WORDS", "8")
-    try:
-        threshold = int(raw)
-    except ValueError:
-        return 8
-    return min(max(threshold, 3), 20)
-
-
-def _should_rewrite_query(query: str) -> bool:
-    cleaned = (query or "").strip().lower()
-    if not cleaned:
-        return False
-
-    words = cleaned.split()
-    is_short = len(words) <= _rewrite_word_threshold()
-    has_ambiguous_hint = any(hint in cleaned for hint in _AMBIGUOUS_HINTS)
-    return is_short or has_ambiguous_hint
-
-
-def _sanitize_rewrite(candidate: str, fallback: str) -> str:
-    rewritten = (candidate or "").strip()
-    if not rewritten:
-        return fallback
-
-    if "\n" in rewritten:
-        rewritten = rewritten.splitlines()[0].strip()
-
-    rewritten = rewritten.strip('"').strip("'")
-    lowered = rewritten.lower()
-    if lowered in {"no rewrite needed", "unchanged", "n/a"}:
-        return fallback
-
-    words = rewritten.split()
-    if len(words) < 3:
-        return fallback
-
-    if len(words) > 40:
-        rewritten = " ".join(words[:40])
-
-    return rewritten
-
-
-def _extract_chat_turns(prompt: str) -> list[str]:
-    return [line.strip() for line in (prompt or "").splitlines() if line.strip()]
-
-
-def _resolve_previous_chat_context(query: str, prompt: str) -> list[str]:
-    turns = _extract_chat_turns(prompt)
-    if not turns:
-        return []
-
-    latest = (query or "").strip()
-    for idx in range(len(turns) - 1, -1, -1):
-        line = turns[idx]
-        if line.upper().startswith("USER:") and line[5:].strip() == latest:
-            return turns[:idx] + turns[idx + 1 :]
-
-    return turns
+# Re-exported for tests and callers; no per-specialist behaviour of their own.
+_sanitize_rewrite = rag.sanitize_rewrite
+_extract_chat_turns = rag.extract_chat_turns
+_resolve_previous_chat_context = rag.resolve_previous_chat_context
 
 
 def _rewrite_for_retrieval(query: str, previous_chat_context: list[str] | None = None) -> str:
-    context_block = ""
-    turns = previous_chat_context or []
-    if turns:
-        history = "\n".join(turns)
-        context_block = f"Previous chat context:\n{history}\n\n"
-
-    model_output = invoke_model(
-        _QUERY_REWRITE_SYSTEM_PROMPT,
-        f"{context_block}User message:\n{query}\n\nStandalone retrieval query:",
-    )
-    return _sanitize_rewrite(model_output, query)
+    return rag.rewrite_for_retrieval(query, previous_chat_context, _PROFILE, invoke_model)
 
 
 def _resolve_retrieval_query(query: str, prompt: str = "") -> str:
-    cleaned = (query or "").strip()
-    if not cleaned:
-        return ""
-
-    rewrite_enabled = _env_bool("HEALTHCARE_QUERY_REWRITE_ENABLED", default=True)
-    if not rewrite_enabled:
-        return cleaned
-
-    if not _should_rewrite_query(cleaned):
-        return cleaned
-
-    previous_chat_context = _resolve_previous_chat_context(cleaned, prompt)
-    rewritten = _rewrite_for_retrieval(cleaned, previous_chat_context=previous_chat_context)
-    if rewritten != cleaned:
-        logger.info("Healthcare KB rewrite applied: '%s' -> '%s'", cleaned, rewritten)
-    return rewritten
+    return rag.resolve_retrieval_query(query, prompt, _PROFILE, _rewrite_for_retrieval, logger)
 
 
 def _build_healthcare_prompt(query: str, prompt: str = ""):
-    original_query = (query or "").strip()
-    retrieval_query = _resolve_retrieval_query(original_query, prompt=prompt)
-
-    results = search_medical_kb(retrieval_query)
-    if not results:
-        return None, []
-
-    if any("error" in item for item in results if isinstance(item, dict)):
-        return None, results
-
-    kb_context = format_kb_response(results)
-    if not kb_context or "could not find relevant information" in kb_context.lower():
-        return None, results
-
-    retrieval_note = ""
-    if retrieval_query and retrieval_query != original_query:
-        retrieval_note = f"Query used for retrieval:\n{retrieval_query}\n\n"
-
-    healthcare_prompt = (
-        f"User query:\n{original_query}\n\n"
-        f"{retrieval_note}"
-        "Retrieved medical knowledge base evidence:\n"
-        f"{kb_context}\n\n"
-        "Provide the best possible answer grounded only in the retrieved evidence."
+    return rag.build_grounded_prompt(
+        query,
+        prompt,
+        _PROFILE,
+        _resolve_retrieval_query,
+        search_medical_kb,
+        format_kb_response,
     )
-    return healthcare_prompt, results
 
 
 @register
-class HealthcareSpecialist(Specialist):
+class HealthcareSpecialist(rag.RagSpecialist):
     name = "healthcare"
     description = "symptoms, medical conditions, treatment, medication, clinical questions."
+    system_prompt = HEALTHCARE_SYSTEM_PROMPT
 
-    def handle(self, state: CoordinatorState) -> CoordinatorState:
-        query = state.get("kb_query", state.get("prompt", ""))
-        prompt = state.get("prompt", "")
-        healthcare_prompt, results = _build_healthcare_prompt(query, prompt=prompt)
-        if not healthcare_prompt:
-            return {"kb_results": results, "response": _NO_INFO}
+    def build_prompt(self, query: str, prompt: str):
+        return _build_healthcare_prompt(query, prompt=prompt)
 
-        answer = invoke_model(HEALTHCARE_SYSTEM_PROMPT, healthcare_prompt)
-        if not answer.strip():
-            return {"kb_results": results, "response": _NO_INFO}
+    def invoke(self, system_prompt: str, user_prompt: str) -> str:
+        return invoke_model(system_prompt, user_prompt)
 
-        return {"kb_results": results, "response": answer}
-
-    def handle_stream(self, state: CoordinatorState):
-        query = state.get("kb_query", state.get("prompt", ""))
-        prompt = state.get("prompt", "")
-        healthcare_prompt, _results = _build_healthcare_prompt(query, prompt=prompt)
-        if not healthcare_prompt:
-            yield _NO_INFO
-            return
-
-        yielded = False
-        for token in invoke_model_stream(HEALTHCARE_SYSTEM_PROMPT, healthcare_prompt):
-            if token:
-                yielded = True
-                yield token
-
-        if not yielded:
-            yield _NO_INFO
+    def invoke_stream(self, system_prompt: str, user_prompt: str):
+        return invoke_model_stream(system_prompt, user_prompt)
