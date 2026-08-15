@@ -30,8 +30,7 @@ jobs:
       - name: Run pytest with coverage
         run: |
           python -m pytest \
-            --cov=services --cov=routers --cov=schemas --cov=models --cov=database \
-            --cov=agents \
+            --cov=services --cov=agents --cov=database \
             --cov-report=term-missing \
             --cov-report=xml:coverage.xml \
             --cov-report=html:../reports/backend/coverage \

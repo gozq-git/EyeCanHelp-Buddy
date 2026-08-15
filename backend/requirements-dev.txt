@@ -12,4 +12,9 @@ locust==2.32.5         # stress / load testing
 # tests cannot exercise those modules without them. Keep in sync with
 # agents/coordinator/requirements.txt.
 langgraph>=0.2.0,<0.4.0
-bedrock-agentcore
+# Pinned deliberately. Left unpinned, pip backtracks to bedrock-agentcore 0.0.1
+# (which predates the top-level `BedrockAgentCoreApp` export) because every later
+# release needs uvicorn>=0.34.2, and 0.1.1+ additionally needs boto3>=1.39.7
+# against the boto3==1.39.0 pin. 0.1.0 is the newest release that works with that
+# pin, and is what the coordinator image itself resolves.
+bedrock-agentcore==0.1.0
