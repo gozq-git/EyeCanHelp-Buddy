@@ -79,6 +79,37 @@ jobs:
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
+  #snyk-scan-BE:
+  #  name: Snyk Scan BE (SCA & SAST)
+  #  needs: backend-tests
+  #  runs-on: ubuntu-latest
+  #  continue-on-error: true
+  #  steps:
+  #    - uses: actions/checkout@v5
+  #    - name: Validate Snyk token
+  #      shell: bash
+  #      env:
+  #        SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+  #      run: |
+  #        if [ -z "$SNYK_TOKEN" ]; then
+  #          echo "Missing required secret: SNYK_TOKEN"
+  #          exit 1
+  #        fi
+  #    - name: Run Snyk to check for vulnerabilities (SCA)
+  #      uses: snyk/actions/python@master
+  #      continue-on-error: true
+  #      env:
+  #        SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+  #      with:
+  #        command: test --file=backend/requirements.txt --package-manager=pip
+  #    - name: Run Snyk to check for vulnerabilities (SAST)
+  #      uses: snyk/actions/python@master
+  #      continue-on-error: true
+  #      env:
+  #        SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+  #      with:
+  #        command: code test
+
   snyk-scan-BE:
     name: Snyk Scan BE (SCA & SAST)
     needs: backend-tests
@@ -95,20 +126,23 @@ jobs:
             echo "Missing required secret: SNYK_TOKEN"
             exit 1
           fi
-      - name: Run Snyk to check for vulnerabilities (SCA)
-        uses: snyk/actions/python@master
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install backend dependencies
+        run: pip install -r backend/requirements.txt
+      - name: Install Snyk CLI
+        run: npm install -g snyk
+      - name: Run Snyk (SCA)
         continue-on-error: true
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        with:
-          command: test --file=backend/requirements.txt --package-manager=pip
-      - name: Run Snyk to check for vulnerabilities (SAST)
-        uses: snyk/actions/python@master
+        run: snyk test --file=backend/requirements.txt --package-manager=pip
+      - name: Run Snyk Code (SAST)
         continue-on-error: true
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        with:
-          command: code test
+        run: snyk code test
 
   build-backend-image:
     name: Build backend Docker image
