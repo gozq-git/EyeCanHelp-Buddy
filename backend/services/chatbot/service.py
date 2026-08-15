@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,7 +14,7 @@ async def save_patient_acknowledgement(
 	mongo_db: AsyncIOMotorDatabase,
 ) -> PatientRecordResponse:
 	record_id = f"REC-{data.patient_id}-{uuid.uuid4().hex[:6].upper()}"
-	issued = datetime.utcnow()
+	issued = datetime.now(timezone.utc)
 	doc = {
 		"record_id": record_id,
 		"issued": issued,
