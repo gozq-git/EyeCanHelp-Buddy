@@ -15,6 +15,19 @@ if str(COORDINATOR_DIR) not in sys.path:
     # Append so backend/main.py keeps precedence for `import main`.
     sys.path.append(str(COORDINATOR_DIR))
 
+# `BedrockAgentCoreApp` only became a top-level export in bedrock-agentcore 0.1.0;
+# requirements-dev.txt pins that version for exactly this reason. Degrade to a
+# reported skip rather than a collection error if the pin ever drifts.
+pytest.importorskip(
+    "bedrock_agentcore",
+    reason="bedrock-agentcore is required to import the coordinator entrypoint",
+)
+if not hasattr(__import__("bedrock_agentcore"), "BedrockAgentCoreApp"):
+    pytest.skip(
+        "installed bedrock-agentcore predates the top-level BedrockAgentCoreApp export",
+        allow_module_level=True,
+    )
+
 
 def _load_coordinator_main():
     spec = importlib.util.spec_from_file_location(
