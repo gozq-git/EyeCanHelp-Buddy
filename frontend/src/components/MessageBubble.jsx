@@ -37,6 +37,10 @@ const QUICK_REPLY_OPTIONS = [
   },
   {
     id: 'appointment',
+    // Hidden from the menu for now. The whole appointment flow is intentionally
+    // left intact (AppointmentPickerContent, APPOINTMENT_TEXT, the ChatWindow
+    // handler and the notifications API) — deleting this line re-enables it.
+    hidden: true,
     label: {
       en: 'Book Appointment',
       zh: '预约',
@@ -122,9 +126,10 @@ const APPOINTMENT_TEXT = {
 // 'Return Menu' is redundant on the first welcome bubble (you're already at the
 // menu), so it's only shown on welcome bubbles re-appended later in a session.
 function WelcomeContent({ onQuickReply, includeReturnMenu, language = 'en' }) {
+  const menuOptions = QUICK_REPLY_OPTIONS.filter(option => !option.hidden)
   const options = includeReturnMenu
-    ? [...QUICK_REPLY_OPTIONS, { id: 'return_menu', label: RETURN_MENU_LABEL }]
-    : QUICK_REPLY_OPTIONS
+    ? [...menuOptions, { id: 'return_menu', label: RETURN_MENU_LABEL }]
+    : menuOptions
 
   const optionLabel = (option) => option.label[language] || option.label.en
   const copy = WELCOME_TEXT[language] || WELCOME_TEXT.en

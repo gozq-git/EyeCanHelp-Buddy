@@ -85,12 +85,14 @@ const MOCK_ACK_RESPONSE = {
 describe('ChatWindow — welcome state', () => {
   beforeEach(() => { vi.clearAllMocks() })
 
-  it('renders the quick-reply option pills on load (incl. Appointment, no Return Menu)', () => {
+  it('renders the quick-reply option pills on load (Appointment hidden, no Return Menu)', () => {
     render(<ChatWindow />)
     expect(screen.getByRole('button', { name: 'General Enquiry' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Fill up IVT Pre-Procedure Acknowledgement Form' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'View Post-IVT Advice Form' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Book Appointment' })).toBeInTheDocument()
+    // Book Appointment is flagged `hidden` in QUICK_REPLY_OPTIONS; the flow it
+    // opens is still implemented, just unreachable from the menu.
+    expect(screen.queryByRole('button', { name: 'Book Appointment' })).not.toBeInTheDocument()
     // Return Menu is redundant on the first welcome bubble — you're already at the menu.
     expect(screen.queryByRole('button', { name: 'Return Menu' })).not.toBeInTheDocument()
   })
@@ -657,7 +659,11 @@ describe('ChatWindow — Return Menu', () => {
     expect(screen.getAllByRole('button', { name: 'General Enquiry' }).length).toBeGreaterThanOrEqual(2)
   })
 
-  it('clicking Appointment from the main menu asks for Singpass login first, then shows weekday and period inputs', async () => {
+  // The three appointment-flow tests below are skipped, not deleted: the flow is
+  // still fully implemented, but its only entry point (the 'Book Appointment'
+  // menu pill) is flagged `hidden` in QUICK_REPLY_OPTIONS, so it can no longer
+  // be driven through the UI. Un-hide that option to re-enable these.
+  it.skip('clicking Appointment from the main menu asks for Singpass login first, then shows weekday and period inputs', async () => {
     render(<ChatWindow />)
     getPatient.mockResolvedValue(MOCK_PATIENT_RESPONSE)
     getEpicRecord.mockResolvedValue(MOCK_EPIC_RECORD_RESPONSE)
@@ -672,7 +678,8 @@ describe('ChatWindow — Return Menu', () => {
     expect(screen.getByLabelText('Preferred period')).toBeInTheDocument()
   })
 
-  it('submitting appointment day/period posts confirmation in chat', async () => {
+  // Skipped: entry point hidden (see note above); flow code retained.
+  it.skip('submitting appointment day/period posts confirmation in chat', async () => {
     render(<ChatWindow />)
     getPatient.mockResolvedValue(MOCK_PATIENT_RESPONSE)
     getEpicRecord.mockResolvedValue(MOCK_EPIC_RECORD_RESPONSE)
@@ -699,7 +706,8 @@ describe('ChatWindow — Return Menu', () => {
     expect(screen.getByText(/has been received/i)).toBeInTheDocument()
   })
 
-  it('shows an error message when appointment notification enqueue fails', async () => {
+  // Skipped: entry point hidden (see note above); flow code retained.
+  it.skip('shows an error message when appointment notification enqueue fails', async () => {
     enqueueAppointmentNotification.mockRejectedValueOnce(new Error('Queue unavailable'))
     render(<ChatWindow />)
     getPatient.mockResolvedValue(MOCK_PATIENT_RESPONSE)
@@ -720,10 +728,10 @@ describe('ChatWindow — Return Menu', () => {
   it('does not add Appointment to the flow-completion bar (Return Menu only)', async () => {
     render(<ChatWindow />)
     await userEvent.click(screen.getByRole('button', { name: 'General Enquiry' }))
-    // The completion bar shows Return Menu; the only Appointment button is the
-    // historical one still in the welcome bubble, so there is exactly one.
+    // The completion bar shows Return Menu. Appointment appears nowhere at all
+    // now that its menu option is flagged `hidden`.
     expect(screen.getByRole('button', { name: 'Return Menu' })).toBeInTheDocument()
-    expect(screen.getAllByRole('button', { name: 'Book Appointment' })).toHaveLength(1)
+    expect(screen.queryAllByRole('button', { name: 'Book Appointment' })).toHaveLength(0)
   })
 })
 

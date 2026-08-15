@@ -15,7 +15,10 @@ test.describe('Post-operation checklist flow', () => {
     await expect(page.getByText(/Post Intravitreal Injection/i)).toBeVisible()
   })
 
-  test('single login is reused for post-op and appointment after returning to menu', async ({ page }) => {
+  // The appointment leg of this journey was dropped when the 'Book Appointment'
+  // menu option was hidden; the pre-procedure leg still proves the same thing
+  // (one login carries across flows after Return Menu).
+  test('single login is reused across flows after returning to menu', async ({ page }) => {
     await mockBackend(page)
     await gotoChat(page)
 
@@ -23,11 +26,6 @@ test.describe('Post-operation checklist flow', () => {
     await singpassLogin(page, 'P001')
     await expect(page.getByText(/Welcome back, Tan Ah Kow/i)).toBeVisible({ timeout: 10_000 })
     await expect(page.getByText(/Post Intravitreal Injection/i)).toBeVisible({ timeout: 10_000 })
-
-    await page.getByRole('button', { name: 'Return Menu' }).first().click()
-
-    await page.getByRole('button', { name: 'Book Appointment' }).first().click()
-    await expect(page.getByLabel('Preferred day')).toBeVisible({ timeout: 10_000 })
 
     await page.getByRole('button', { name: 'Return Menu' }).first().click()
 

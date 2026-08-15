@@ -9,7 +9,9 @@ describe('MessageBubble — welcome type', () => {
     expect(screen.getByRole('button', { name: 'General Enquiry' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Fill up IVT Pre-Procedure Acknowledgement Form' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'View Post-IVT Advice Form' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Book Appointment' })).toBeInTheDocument()
+    // Book Appointment is flagged `hidden` in QUICK_REPLY_OPTIONS, so the pill
+    // is not rendered even though the flow behind it is still in the codebase.
+    expect(screen.queryByRole('button', { name: 'Book Appointment' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Return Menu' })).not.toBeInTheDocument()
   })
 
