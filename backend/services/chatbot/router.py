@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from database.postgres import get_db
 import database.mongo as mongo_module
+from .masking import mask_messages, mask_sensitive_text
 from .schema import (
     AcknowledgementRequest,
     AcknowledgementResponse,
@@ -66,8 +67,8 @@ async def _log_exchange_quietly(
         await save_chat_exchange(
             session_id=session_id,
             mode=mode,
-            user_message=user_message,
-            system_response=system_response,
+            user_message=mask_sensitive_text(user_message),
+            system_response=mask_sensitive_text(system_response),
             db=db,
         )
     except Exception:
@@ -166,11 +167,13 @@ async def chatbot(
     db: Annotated[AsyncSession, Depends(get_db)],
     stream: Annotated[bool, Query()] = False,
 ):
-    messages = [{"role": m.role, "content": m.content} for m in request.messages]
-    latest_user_message = _latest_user_message(messages)
-    should_log = request.mode == "general_enquiry" and bool(latest_user_message)
-    session_id = request.session_id or f"ge-{uuid.uuid4().hex}"
     mode = request.mode or "general_enquiry"
+    messages = [{"role": m.role, "content": m.content} for m in request.messages]
+    if mode == "general_enquiry":
+        messages = mask_messages(messages)
+    latest_user_message = _latest_user_message(messages)
+    session_id = request.session_id or f"ge-{uuid.uuid4().hex}"
+    should_log = mode == "general_enquiry" and bool(latest_user_message)
 
     if stream:
         return StreamingResponse(

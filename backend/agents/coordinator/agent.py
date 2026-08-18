@@ -68,10 +68,10 @@ _ESCALATION_TEXT = {
         "base": "Your symptoms may require urgent attention.",
         "hotline": (
             "During office hours (8:30am to 5:30pm, weekdays):\n"
-            "- Please call 81263632\n\n"
+            "• Please call 81263632\n\n"
             "After office hours (including weekends and public holidays):\n"
-            "- Call eye doctor on call via TTSH operator at 6256 6011 OR\n"
-            "- Walk in to TTSH Emergency Department (together with this information sheet at)\n\n"
+            "• Call eye doctor on call via TTSH operator at 6256 6011 OR\n"
+            "• Walk in to TTSH Emergency Department (together with this information sheet at)\n\n"
             "Tan Tock Seng Hospital\n"
             "Basement 1\n"
             "11 Jalan Tan Tock Seng\n"
@@ -82,10 +82,10 @@ _ESCALATION_TEXT = {
         "base": "您的症状可能需要紧急处理。",
         "hotline": (
             "办公时间（工作日 8:30am 至 5:30pm）：\n"
-            "- 请致电 81263632\n\n"
+            "• 请致电 81263632\n\n"
             "非办公时间（包括周末及公共假期）：\n"
-            "- 请通过 TTSH 总机 6256 6011 联系眼科值班医生，或\n"
-            "- 请携带此信息单前往 TTSH 急诊部\n\n"
+            "• 请通过 TTSH 总机 6256 6011 联系眼科值班医生，或\n"
+            "• 请携带此信息单前往 TTSH 急诊部\n\n"
             "陈笃生医院\n"
             "B1 层\n"
             "11 Jalan Tan Tock Seng\n"
@@ -96,10 +96,10 @@ _ESCALATION_TEXT = {
         "base": "Gejala anda mungkin memerlukan perhatian segera.",
         "hotline": (
             "Semasa waktu pejabat (8:30 pagi hingga 5:30 petang, hari bekerja):\n"
-            "- Sila hubungi 81263632\n\n"
+            "• Sila hubungi 81263632\n\n"
             "Selepas waktu pejabat (termasuk hujung minggu dan cuti umum):\n"
-            "- Hubungi doktor mata bertugas melalui operator TTSH di 6256 6011 ATAU\n"
-            "- Datang terus ke Jabatan Kecemasan TTSH (bawa helaian maklumat ini bersama)\n\n"
+            "• Hubungi doktor mata bertugas melalui operator TTSH di 6256 6011 ATAU\n"
+            "• Datang terus ke Jabatan Kecemasan TTSH (bawa helaian maklumat ini bersama)\n\n"
             "Tan Tock Seng Hospital\n"
             "Aras Basement 1\n"
             "11 Jalan Tan Tock Seng\n"
@@ -110,10 +110,10 @@ _ESCALATION_TEXT = {
         "base": "உங்கள் அறிகுறிகளுக்கு அவசர கவனம் தேவைப்படலாம்.",
         "hotline": (
             "அலுவலக நேரத்தில் (கிழமைகள், காலை 8:30 முதல் மாலை 5:30 வரை):\n"
-            "- தயவுசெய்து 81263632 என்ற எண்ணிற்கு அழைக்கவும்\n\n"
+            "• தயவுசெய்து 81263632 என்ற எண்ணிற்கு அழைக்கவும்\n\n"
             "அலுவலக நேரத்திற்குப் பிறகு (வார இறுதி மற்றும் பொது விடுமுறைகள் உட்பட):\n"
-            "- TTSH ஆபரேட்டர் 6256 6011 மூலம் கண் மருத்துவர் (on-call) ஐ தொடர்புகொள்ளவும் அல்லது\n"
-            "- இந்த தகவல் தாளை எடுத்துக்கொண்டு TTSH அவசர சிகிச்சைப் பிரிவிற்கு நேரடியாக செல்லவும்\n\n"
+            "• TTSH ஆபரேட்டர் 6256 6011 மூலம் கண் மருத்துவர் (on-call) ஐ தொடர்புகொள்ளவும் அல்லது\n"
+            "• இந்த தகவல் தாளை எடுத்துக்கொண்டு TTSH அவசர சிகிச்சைப் பிரிவிற்கு நேரடியாக செல்லவும்\n\n"
             "Tan Tock Seng Hospital\n"
             "Basement 1\n"
             "11 Jalan Tan Tock Seng\n"

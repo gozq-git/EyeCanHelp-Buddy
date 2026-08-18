@@ -56,6 +56,37 @@ def test_chat_logs_general_enquiry_exchange_with_session_id(client, monkeypatch,
     assert logs[0].system_response == "A cataract is a clouding of the eye's lens."
 
 
+def test_chat_masks_sensitive_input_before_routing_and_logging(client, monkeypatch, sqlite_sessionmaker):
+    async def fake_chat(messages):
+        assert messages[-1]["content"] == "Call me at +65******67 on 2*-0*-19**"
+        return "Captured: Call me at +65******67 on 2*-0*-19**"
+
+    monkeypatch.setattr("services.chatbot.router.chat", fake_chat)
+
+    resp = client.post(
+        "/api/chat",
+        json={
+            "messages": [{"role": "user", "content": "Call me at +6591234567 on 25-03-1965"}],
+            "mode": "general_enquiry",
+            "session_id": "sess-mask-001",
+        },
+    )
+    assert resp.status_code == 200
+    assert resp.json() == {"reply": "Captured: Call me at +65******67 on 2*-0*-19**"}
+
+    async def _fetch_logs():
+        async with sqlite_sessionmaker() as session:
+            result = await session.execute(
+                select(ChatExchangeLog).where(ChatExchangeLog.session_id == "sess-mask-001")
+            )
+            return result.scalars().all()
+
+    logs = asyncio.run(_fetch_logs())
+    assert len(logs) == 1
+    assert logs[0].user_message == "Call me at +65******67 on 2*-0*-19**"
+    assert logs[0].system_response == "Captured: Call me at +65******67 on 2*-0*-19**"
+
+
 def test_chat_does_not_log_non_general_mode(client, monkeypatch, sqlite_sessionmaker):
     async def fake_chat(messages):
         return "ok"
@@ -81,6 +112,24 @@ def test_chat_does_not_log_non_general_mode(client, monkeypatch, sqlite_sessionm
 
     logs = asyncio.run(_fetch_logs())
     assert logs == []
+
+
+def test_chat_does_not_mask_non_general_mode_messages(client, monkeypatch):
+    async def fake_chat(messages):
+        assert messages[-1]["content"] == "Call me at +6591234567 on 25-03-1965"
+        return "ok"
+
+    monkeypatch.setattr("services.chatbot.router.chat", fake_chat)
+
+    resp = client.post(
+        "/api/chat",
+        json={
+            "messages": [{"role": "user", "content": "Call me at +6591234567 on 25-03-1965"}],
+            "mode": "post_operation",
+        },
+    )
+    assert resp.status_code == 200
+    assert resp.json() == {"reply": "ok"}
 
 
 def test_chat_rejects_malformed_body(client):

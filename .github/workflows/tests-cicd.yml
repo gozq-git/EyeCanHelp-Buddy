@@ -72,7 +72,10 @@ jobs:
           node-version: 20
       - name: Install frontend deps
         working-directory: frontend
-        run: npm ci
+        # npm ci can fail here when npm resolves optional peer trees differently
+        # across Node/npm versions (e.g., esbuild 0.28 optional platform packages).
+        # For the e2e job we only need a working local dev server, so use install.
+        run: npm install --no-audit --no-fund
       - name: Install E2E deps + browser
         working-directory: e2e
         run: |
