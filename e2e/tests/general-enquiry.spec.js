@@ -17,7 +17,7 @@ test.describe('General Enquiry flow', () => {
     await expect(page.getByText('A cataract is a clouding of the eye lens.')).toBeVisible()
   })
 
-  test('shows an error bubble when the chat API fails', async ({ page }) => {
+  test('shows backend error detail bubble when the chat API fails', async ({ page }) => {
     await mockBackend(page, {
       chat: (route) => route.fulfill({ status: 500, contentType: 'application/json', body: '{"detail":"boom"}' }),
     })
@@ -28,6 +28,6 @@ test.describe('General Enquiry flow', () => {
     await input.fill('Trigger an error')
     await input.press('Enter')
 
-    await expect(page.getByText(/encountered an error/i)).toBeVisible()
+    await expect(page.getByText('boom')).toBeVisible()
   })
 })

@@ -19,6 +19,8 @@ Always:
 - If the snippets are relevant, always phrase the answer using the same phrasing as the snippets.
 - If the snippets are not relevant, do not mention directly what was retrieved by the KB snippets.
 - End with a short safety note for urgent symptoms.
+
+If there are no relevant retrieved information, reply with "Sorry, I am unable to answer your query. Please contact the medical hotline."
 """
 
 _NO_INFO = rag.NO_INFO
@@ -81,7 +83,7 @@ def _build_healthcare_prompt(query: str, prompt: str = ""):
 @register
 class HealthcareSpecialist(rag.RagSpecialist):
     name = "healthcare"
-    description = "symptoms, medical conditions, treatment, medication, clinical questions."
+    description = "Eye or ophthalmology related symptoms, medical conditions, treatment, medication, clinical questions."
     system_prompt = HEALTHCARE_SYSTEM_PROMPT
 
     def build_prompt(self, query: str, prompt: str):

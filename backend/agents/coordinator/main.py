@@ -28,7 +28,7 @@ workflow = create_agent()
 async def _stream_specialist_response(query: str):
     """Stream the routed specialist's tokens, or a single terminal message."""
     state = route_request(query)
-    if state.get("route") == "escalate":
+    if state.get("route") in {"escalate", "out_of_scope"}:
         text = str(state.get("response", "")).strip()
         if text:
             yield text

@@ -19,6 +19,8 @@ Always:
 - Be concise, practical, and explicit about assumptions.
 - If snippets are insufficient, say what is missing and direct the user to billing/financial offices.
 - Do not invent facts that are not present in the snippets.
+
+If there are no relevant retrieved information, reply with "Sorry, I am unable to answer your query. Please contact the medical hotline."
 """
 
 _NO_INFO = rag.NO_INFO
@@ -27,6 +29,7 @@ _QUERY_REWRITE_SYSTEM_PROMPT = """You rewrite follow-up financial user messages 
 financial search query for retrieval.
 
 Rules:
+- Always rewrite in English.
 - Return exactly one line.
 - Keep key financial entities and constraints from the user input.
 - Do not add facts not present in the user input.
@@ -80,7 +83,7 @@ def _build_financial_prompt(query: str, prompt: str = ""):
 @register
 class FinancialSpecialist(rag.RagSpecialist):
     name = "financial"
-    description = "payment, medical cost, medisave, billing and budgeting questions."
+    description = "Eye or ophthalmology related payment, medical cost, medisave, billing questions."
     system_prompt = FINANCIAL_SYSTEM_PROMPT
 
     def build_prompt(self, query: str, prompt: str):

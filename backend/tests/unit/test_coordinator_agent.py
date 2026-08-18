@@ -44,7 +44,8 @@ def test_build_triage_prompt_lists_every_plugin():
 
     assert "- healthcare: clinical questions" in prompt
     assert "- financial: billing" in prompt
-    assert "Return exactly one word: healthcare OR financial." in prompt
+    assert "return exactly one word: out_of_scope." in prompt
+    assert "Return exactly one word: healthcare OR financial OR out_of_scope." in prompt
 
 
 # ── _contains_high_risk_keywords ──────────────────────────────────────────────
@@ -191,6 +192,21 @@ def test_triage_node_extracts_query_from_transcript(monkeypatch):
     assert seen["user_prompt"] == "my eye hurts"
 
 
+def test_triage_node_returns_out_of_scope_response(monkeypatch):
+    monkeypatch.setattr(coordinator_agent, "invoke_model", lambda _s, _u: "OUT_OF_SCOPE")
+    node = coordinator_agent._make_triage_node(
+        [_StubSpecialist("healthcare"), _StubSpecialist("financial")]
+    )
+
+    out = node({"prompt": "USER: how do I renew my passport?", "kb_query": "how do I renew my passport?"})
+
+    assert out == {
+        "route": "out_of_scope",
+        "kb_query": "how do I renew my passport?",
+        "response": "Sorry, I am only able to assist with queries related to eye or ophthalmology.",
+    }
+
+
 # ── route edges ───────────────────────────────────────────────────────────────
 def test_escalation_route_edge_reads_state():
     assert coordinator_agent._escalation_route_edge({"route": "escalate"}) == "escalate"
@@ -227,6 +243,24 @@ def test_route_request_continues_to_triage(monkeypatch):
     assert state["route"] == "financial"
     assert state["kb_query"] == "how much is the injection"
     assert len(calls) == 2
+
+
+def test_route_request_returns_out_of_scope_response(monkeypatch):
+    calls = []
+
+    def _fake_invoke(_system, user_prompt):
+        calls.append(user_prompt)
+        return _NO_ESCALATION if len(calls) == 1 else "out_of_scope"
+
+    monkeypatch.setattr(coordinator_agent, "invoke_model", _fake_invoke)
+
+    state = coordinator_agent.route_request("USER: what is the weather today")
+
+    assert state["route"] == "out_of_scope"
+    assert state["kb_query"] == "what is the weather today"
+    assert state["response"] == (
+        "Sorry, I am only able to assist with queries related to eye or ophthalmology."
+    )
 
 
 # ── get_specialist_by_name ────────────────────────────────────────────────────

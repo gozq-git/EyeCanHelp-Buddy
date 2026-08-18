@@ -164,6 +164,23 @@ async def test_invoke_streams_nothing_for_blank_escalation(monkeypatch):
     assert await _drain(stream) == []
 
 
+async def test_invoke_streams_out_of_scope_response(monkeypatch):
+    monkeypatch.setattr(
+        coordinator_main,
+        "route_request",
+        lambda _q: {
+            "route": "out_of_scope",
+            "response": "Sorry, I am only able to assist with queries related to eye or ophthalmology.",
+        },
+    )
+
+    stream = await coordinator_main.invoke({"prompt": "USER: book flight tickets", "stream": True})
+
+    assert await _drain(stream) == [
+        "Sorry, I am only able to assist with queries related to eye or ophthalmology."
+    ]
+
+
 async def test_invoke_streams_message_for_unknown_route(monkeypatch):
     monkeypatch.setattr(coordinator_main, "route_request", lambda _q: {"route": "mystery"})
     monkeypatch.setattr(coordinator_main, "get_specialist_by_name", lambda _n: None)
