@@ -942,7 +942,7 @@ export default function ChatWindow({ onBack, language = 'en' }) {
             <div style={{ display: 'flex', alignItems: 'flex-end', gap: '8px', marginBottom: '8px' }}>
               <EyeLogoSVG size={26} />
               <div style={{ background: '#fff', borderRadius: '4px 20px 20px 20px', padding: '10px 16px', fontSize: '14px', color: '#777', boxShadow: '0 1px 4px rgba(0,0,0,0.08)' }}>
-                {`Thinking${thinkingDots}`}
+                {`${tr('thinking') || 'Thinking'}${thinkingDots}`}
               </div>
             </div>
           )}

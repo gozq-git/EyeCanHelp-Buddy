@@ -24,7 +24,9 @@ def _normalize_language(language: str | None) -> str:
 
 def _build_prompt(messages: list[dict], language: str | None = None) -> str:
     # Convert chat history into a simple transcript expected by the coordinator runtime.
-    lines: list[str] = [f"LANGUAGE: {_normalize_language(language)}"]
+    lines: list[str] = []
+    if language is not None:
+        lines.append(f"LANGUAGE: {_normalize_language(language)}")
     for msg in messages:
         role = str(msg.get("role", "user")).strip().upper()
         content = str(msg.get("content", "")).strip()
