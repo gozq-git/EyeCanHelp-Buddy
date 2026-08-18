@@ -27,6 +27,7 @@ _QUERY_REWRITE_SYSTEM_PROMPT = """You rewrite follow-up healthcare user messages
 medical search query for retrieval.
 
 Rules:
+- Always rewrite in English.
 - Return exactly one line.
 - Keep key medical entities and symptoms from the user input.
 - Do not add facts not present in the user input.
