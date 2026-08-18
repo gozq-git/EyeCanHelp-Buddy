@@ -29,7 +29,20 @@ _DEFAULT_ROUTE = "healthcare"
 
 HIGH_RISK_MEDICAL_KEYWORDS = [
     "pus",
+    "discharge from the eye",
+    "eye discharge",
     "cloudy cornea",
+    "脓",
+    "流脓",
+    "眼部分泌物",
+    "角膜混浊",
+    "角膜混濁",
+    "nanah",
+    "leleran mata",
+    "kornea keruh",
+    "சீழ்",
+    "கண் சீழ்",
+    "மங்கலான கார்னியா",
 ]
 
 ESCALATION_REVIEW_SYSTEM_PROMPT = """You are a clinical risk screening assistant.
@@ -47,6 +60,35 @@ Return strict JSON with this schema:
 {"escalate": true|false, "reason": "short reason", "detected_terms": ["term1", "term2"]}
 No extra text.
 """
+
+_SUPPORTED_LANGUAGES = {"en", "zh", "ms", "ta"}
+
+_ESCALATION_TEXT = {
+    "en": {
+        "base": "Your symptoms may require urgent attention.",
+        "detected": "Detected",
+        "reason": "Reason",
+        "hotline": "Please contact {hotline} immediately for medical advice.",
+    },
+    "zh": {
+        "base": "您的症状可能需要紧急处理。",
+        "detected": "检测到",
+        "reason": "原因",
+        "hotline": "请立即联系 {hotline} 获取医疗建议。",
+    },
+    "ms": {
+        "base": "Gejala anda mungkin memerlukan perhatian segera.",
+        "detected": "Dikesan",
+        "reason": "Sebab",
+        "hotline": "Sila hubungi {hotline} dengan segera untuk nasihat perubatan.",
+    },
+    "ta": {
+        "base": "உங்கள் அறிகுறிகளுக்கு அவசர கவனம் தேவைப்படலாம்.",
+        "detected": "கண்டறியப்பட்டது",
+        "reason": "காரணம்",
+        "hotline": "மருத்துவ ஆலோசனைக்காக உடனடியாக {hotline} ஐ தொடர்புகொள்ளவும்.",
+    },
+}
 
 
 def _build_triage_prompt(specs) -> str:
@@ -83,8 +125,28 @@ def _parse_escalation_decision(raw: str) -> Dict[str, Any]:
     return {"escalate": False, "reason": "", "detected_terms": []}
 
 
+def _extract_language_from_prompt(prompt: str) -> str:
+    for line in (prompt or "").splitlines():
+        clean = line.strip()
+        if clean.upper().startswith("LANGUAGE:"):
+            value = clean.split(":", 1)[1].strip().lower()
+            if value in _SUPPORTED_LANGUAGES:
+                return value
+            return "en"
+    return "en"
+
+
+def _build_escalation_response(*, language: str, hotline: str, detected: list[str], reason: str) -> str:
+    copy = _ESCALATION_TEXT.get(language, _ESCALATION_TEXT["en"])
+    details = f" {copy['detected']}: {', '.join(detected)}." if detected else ""
+    reason_text = f" {copy['reason']}: {reason}." if reason else ""
+    hotline_text = copy["hotline"].format(hotline=hotline)
+    return f"{copy['base']}{details}{reason_text} {hotline_text}"
+
+
 def _escalate_node(state: CoordinatorState) -> CoordinatorState:
     prompt = state.get("prompt", "")
+    language = _extract_language_from_prompt(prompt)
     user_query = extract_latest_user_input(prompt)
     query = user_query or prompt
 
@@ -98,15 +160,15 @@ def _escalate_node(state: CoordinatorState) -> CoordinatorState:
         detected = keyword_hits + [
             term for term in model_decision.get("detected_terms", []) if term not in keyword_hits
         ]
-        details = f" Detected: {', '.join(detected)}." if detected else ""
         reason = str(model_decision.get("reason", "")).strip()
-        reason_text = f" Reason: {reason}." if reason else ""
         return {
             "route": "escalate",
             "kb_query": query,
-            "response": (
-                f"Your symptoms may require urgent attention.{details}{reason_text} "
-                f"Please contact {hotline} immediately for medical advice."
+            "response": _build_escalation_response(
+                language=language,
+                hotline=hotline,
+                detected=detected,
+                reason=reason,
             ),
         }
 

@@ -19,6 +19,7 @@ export const sendChatMessage = (messages, options = {}) => {
     messages,
     ...(options.sessionId ? { session_id: options.sessionId } : {}),
     ...(options.mode ? { mode: options.mode } : {}),
+    ...(options.language ? { language: options.language } : {}),
   }
   return api.post('/chat', payload)
 }
@@ -54,11 +55,12 @@ const frameSeparatorLength = (buffer, boundary) =>
   buffer.startsWith('\r\n\r\n', boundary) ? 4 : 2
 
 export const sendChatMessageStream = async (messages, options = {}) => {
-  const { onChunk, onHeartbeat, signal, sessionId, mode } = options
+  const { onChunk, onHeartbeat, signal, sessionId, mode, language } = options
   const payload = {
     messages,
     ...(sessionId ? { session_id: sessionId } : {}),
     ...(mode ? { mode } : {}),
+    ...(language ? { language } : {}),
   }
   const response = await fetch('/api/chat?stream=true', {
     method: 'POST',

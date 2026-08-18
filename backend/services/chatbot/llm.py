@@ -15,9 +15,18 @@ SSE_DATA_PREFIX = "data: "
 JSON_TEXT_KEYS = ("response", "result", "output")
 
 
-def _build_prompt(messages: list[dict]) -> str:
+def _normalize_language(language: str | None) -> str:
+    value = (language or "").strip().lower()
+    if value in {"en", "zh", "ms", "ta"}:
+        return value
+    return "en"
+
+
+def _build_prompt(messages: list[dict], language: str | None = None) -> str:
     # Convert chat history into a simple transcript expected by the coordinator runtime.
     lines: list[str] = []
+    if language is not None:
+        lines.append(f"LANGUAGE: {_normalize_language(language)}")
     for msg in messages:
         role = str(msg.get("role", "user")).strip().upper()
         content = str(msg.get("content", "")).strip()
@@ -228,8 +237,8 @@ async def _invoke_with_http_endpoint(prompt: str) -> str:
     return _extract_text(response.headers.get("content-type", ""), response.text).strip()
 
 
-async def chat(messages: list[dict]) -> str:
-    prompt = _build_prompt(messages)
+async def chat(messages: list[dict], language: str | None = None) -> str:
+    prompt = _build_prompt(messages, language=language)
 
     text = await _invoke_with_runtime_arn(prompt)
     if not text:
@@ -240,8 +249,8 @@ async def chat(messages: list[dict]) -> str:
     return text
 
 
-async def chat_stream(messages: list[dict]) -> AsyncIterator[str]:
-    prompt = _build_prompt(messages)
+async def chat_stream(messages: list[dict], language: str | None = None) -> AsyncIterator[str]:
+    prompt = _build_prompt(messages, language=language)
 
     response = await _invoke_with_runtime_arn_response(prompt, stream=True)
     if not response:

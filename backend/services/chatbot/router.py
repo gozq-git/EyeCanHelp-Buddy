@@ -1,4 +1,5 @@
 import asyncio
+import inspect
 import os
 import uuid
 from contextlib import aclosing
@@ -74,9 +75,34 @@ async def _log_exchange_quietly(
         pass
 
 
-async def _iter_chunks_with_heartbeat(messages: list[dict[str, str]]):
+def _accepts_language_arg(fn) -> bool:
+    """Return True when callable supports a `language` keyword argument."""
+    try:
+        signature = inspect.signature(fn)
+    except (TypeError, ValueError):
+        return False
+
+    for param in signature.parameters.values():
+        if param.kind == inspect.Parameter.VAR_KEYWORD:
+            return True
+    return "language" in signature.parameters
+
+
+async def _call_chat(messages: list[dict[str, str]], language: str | None):
+    if _accepts_language_arg(chat):
+        return await chat(messages, language=language)
+    return await chat(messages)
+
+
+def _iter_chat_stream(messages: list[dict[str, str]], language: str | None):
+    if _accepts_language_arg(chat_stream):
+        return chat_stream(messages, language=language)
+    return chat_stream(messages)
+
+
+async def _iter_chunks_with_heartbeat(messages: list[dict[str, str]], language: str | None = None):
     """Yield reply chunks, emitting `_HEARTBEAT` whenever the model stalls."""
-    iterator = chat_stream(messages).__aiter__()
+    iterator = _iter_chat_stream(messages, language=language).__aiter__()
     pending_next = None
     try:
         while True:
@@ -102,6 +128,7 @@ async def _iter_chunks_with_heartbeat(messages: list[dict[str, str]]):
 async def _stream_chat_events(
     messages: list[dict[str, str]],
     *,
+    language: str | None,
     should_log: bool,
     session_id: str,
     mode: str,
@@ -111,7 +138,7 @@ async def _stream_chat_events(
     """Render the streamed reply as SSE frames and log the finished exchange."""
     streamed_reply = ""
     try:
-        async with aclosing(_iter_chunks_with_heartbeat(messages)) as chunks:
+        async with aclosing(_iter_chunks_with_heartbeat(messages, language=language)) as chunks:
             async for chunk in chunks:
                 if chunk is _HEARTBEAT:
                     yield _to_sse_event("heartbeat", "ping")
@@ -149,6 +176,7 @@ async def chatbot(
         return StreamingResponse(
             _stream_chat_events(
                 messages,
+                language=request.language,
                 should_log=should_log,
                 session_id=session_id,
                 mode=mode,
@@ -163,7 +191,7 @@ async def chatbot(
             },
         )
 
-    reply = await chat(messages)
+    reply = await _call_chat(messages, language=request.language)
     if should_log:
         await _log_exchange_quietly(
             session_id=session_id,

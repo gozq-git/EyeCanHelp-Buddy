@@ -33,6 +33,7 @@ class ChatRequest(BaseModel):
     messages: list[ChatMessage]
     session_id: str | None = None
     mode: str | None = None
+    language: str | None = None
 
 
 class ChatResponse(BaseModel):
