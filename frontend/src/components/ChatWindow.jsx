@@ -262,7 +262,7 @@ export default function ChatWindow({ onBack, language = 'en' }) {
       addMsg({
         role: 'bot',
         type: 'text',
-        content: "Sure, I can help answer general enquiries about eye procedures or surgery.\n\n**Disclaimer:**\nThis chatbot provides general information only and cannot replace your doctor's clinical advice, diagnosis, or treatment plan.\nIt is not intended to replace standard medical care.\nIf you have urgent or worsening symptoms, please seek immediate medical attention.",
+        content: tr('generalEnquiryIntro'),
       })
     } else if (actionId === 'pre_procedure') {
       if (await continueWithExistingLogin('pre_procedure')) return
@@ -823,6 +823,7 @@ export default function ChatWindow({ onBack, language = 'en' }) {
       const streamedText = await sendChatMessageStream(history, {
         sessionId: generalEnquirySessionIdRef.current,
         mode: 'general_enquiry',
+        language,
         signal: controller.signal,
         onChunk: (chunk) => {
           if (!receivedStreamChunk) {
@@ -857,6 +858,7 @@ export default function ChatWindow({ onBack, language = 'en' }) {
         const res = await sendChatMessage(history, {
           sessionId: generalEnquirySessionIdRef.current,
           mode: 'general_enquiry',
+          language,
         })
         if (placeholderId !== null) {
           updateMsg(placeholderId, { content: res.data.reply })
