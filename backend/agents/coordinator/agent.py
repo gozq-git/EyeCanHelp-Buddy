@@ -11,8 +11,7 @@ at import time. Adding/removing a specialist requires NO change to this file.
 """
 import json
 import logging
-import os
-from typing import Any, Dict, List
+from typing import Any
 
 from langgraph.graph import END, StateGraph
 
@@ -26,6 +25,10 @@ logger = logging.getLogger(__name__)
 # Fallback route when triage is unclear. Prefer "healthcare" (RAG-grounded and
 # safest default); otherwise fall back to whatever plug-in registered first.
 _DEFAULT_ROUTE = "healthcare"
+_OUT_OF_SCOPE_ROUTE = "out_of_scope"
+_OUT_OF_SCOPE_RESPONSE = (
+    "Sorry, I am only able to assist with queries related to eye or ophthalmology."
+)
 
 HIGH_RISK_MEDICAL_KEYWORDS = [
     "pus",
@@ -126,22 +129,25 @@ _ESCALATION_TEXT = {
 def _build_triage_prompt(specs) -> str:
     """Construct the triage system prompt from the registered plug-ins."""
     catalogue = "\n".join(f"- {s.name}: {s.description}" for s in specs)
-    labels = " OR ".join(s.name for s in specs)
+    labels = " OR ".join([*(s.name for s in specs), _OUT_OF_SCOPE_ROUTE])
     return (
         "You are a routing assistant.\n"
-        "Classify the user message into exactly one label:\n"
+        "Classify the user message into exactly one label.\n"
+        "If the user message is not related to eye health, eye care, vision, or ophthalmology, "
+        f"return exactly one word: {_OUT_OF_SCOPE_ROUTE}.\n"
+        "Otherwise choose exactly one specialist label from this list:\n"
         f"{catalogue}\n\n"
         f"Return exactly one word: {labels}.\n"
         "No punctuation and no extra text.\n"
     )
 
 
-def _contains_high_risk_keywords(text: str) -> List[str]:
+def _contains_high_risk_keywords(text: str) -> list[str]:
     normalized = (text or "").lower()
     return [keyword for keyword in HIGH_RISK_MEDICAL_KEYWORDS if keyword in normalized]
 
 
-def _parse_escalation_decision(raw: str) -> Dict[str, Any]:
+def _parse_escalation_decision(raw: str) -> dict[str, Any]:
     try:
         data = json.loads(raw)
         if isinstance(data, dict):
@@ -210,6 +216,14 @@ def _make_triage_node(specs):
         user_query = state.get("kb_query", "") or extract_latest_user_input(prompt)
         decision = invoke_model(triage_prompt, user_query or prompt).strip().lower()
 
+        if _OUT_OF_SCOPE_ROUTE in decision:
+            logger.info("Coordinator triage selected route=%s", _OUT_OF_SCOPE_ROUTE)
+            return {
+                "route": _OUT_OF_SCOPE_ROUTE,
+                "kb_query": user_query or prompt,
+                "response": _OUT_OF_SCOPE_RESPONSE,
+            }
+
         route = next((name for name in valid if name in decision), default)
         logger.info("Coordinator triage selected route=%s", route)
         return {"route": route, "kb_query": user_query or prompt}
@@ -269,7 +283,10 @@ def create_agent():
     graph.add_conditional_edges(
         "llm_triage",
         _triage_route_edge,
-        {spec.name: spec.name for spec in specs},
+        {
+            **{spec.name: spec.name for spec in specs},
+            _OUT_OF_SCOPE_ROUTE: END,
+        },
     )
 
     return graph.compile()
