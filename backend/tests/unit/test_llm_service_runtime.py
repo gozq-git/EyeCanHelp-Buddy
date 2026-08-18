@@ -61,6 +61,30 @@ def test_extract_runtime_response_empty():
     assert llm_service._extract_runtime_response({"contentType": "text/plain"}) == ""
 
 
+def test_extract_guardrail_output_message_prefers_outputs_text():
+    response = {
+        "outputs": [
+            {"text": "Blocked by guardrail output."},
+        ]
+    }
+
+    assert llm_service._extract_guardrail_output_message(response) == "Blocked by guardrail output."
+
+
+def test_extract_guardrail_output_message_from_nested_content():
+    response = {
+        "outputs": [
+            {
+                "content": [
+                    {"text": {"text": "Nested blocked message."}},
+                ]
+            }
+        ]
+    }
+
+    assert llm_service._extract_guardrail_output_message(response) == "Nested blocked message."
+
+
 @pytest.mark.asyncio
 async def test_invoke_with_runtime_arn_returns_empty_when_not_configured(monkeypatch):
     monkeypatch.delenv("AGENTCORE_COORDINATOR_RUNTIME_ARN", raising=False)
@@ -68,6 +92,60 @@ async def test_invoke_with_runtime_arn_returns_empty_when_not_configured(monkeyp
     result = await llm_service._invoke_with_runtime_arn("hello")
 
     assert result == ""
+
+
+@pytest.mark.asyncio
+async def test_apply_guardrail_to_messages_returns_blocked_message(monkeypatch):
+    monkeypatch.setenv("BEDROCK_GUARDRAIL_ID", "gr-123")
+    monkeypatch.setenv("BEDROCK_GUARDRAIL_VERSION", "1")
+    monkeypatch.setenv("AWS_REGION", "us-east-1")
+
+    class _FakeClient:
+        def apply_guardrail(self, **kwargs):
+            assert kwargs["guardrailIdentifier"] == "gr-123"
+            assert kwargs["guardrailVersion"] == "1"
+            assert kwargs["source"] == "INPUT"
+            assert kwargs["content"] == [{"text": {"text": "Unsafe request"}}]
+            return {
+                "action": "GUARDRAIL_INTERVENED",
+                "outputs": [{"text": "Please rephrase your request."}],
+            }
+
+    monkeypatch.setattr(llm_service.boto3, "client", lambda service, region_name=None: _FakeClient())
+
+    result = await llm_service.apply_guardrail_to_messages([
+        {"role": "user", "content": "Unsafe request"},
+    ])
+
+    assert result == {"blocked": True, "message": "Please rephrase your request."}
+
+
+@pytest.mark.asyncio
+async def test_apply_guardrail_to_messages_raises_when_config_missing(monkeypatch):
+    monkeypatch.delenv("BEDROCK_GUARDRAIL_ID", raising=False)
+    monkeypatch.delenv("BEDROCK_GUARDRAIL_VERSION", raising=False)
+
+    with pytest.raises(llm_service.GuardrailUnavailableError):
+        await llm_service.apply_guardrail_to_messages([
+            {"role": "user", "content": "hello"},
+        ])
+
+
+@pytest.mark.asyncio
+async def test_apply_guardrail_to_messages_raises_on_client_error(monkeypatch):
+    monkeypatch.setenv("BEDROCK_GUARDRAIL_ID", "gr-123")
+    monkeypatch.setenv("BEDROCK_GUARDRAIL_VERSION", "1")
+
+    class _FakeClient:
+        def apply_guardrail(self, **kwargs):
+            raise RuntimeError("bedrock down")
+
+    monkeypatch.setattr(llm_service.boto3, "client", lambda service, region_name=None: _FakeClient())
+
+    with pytest.raises(llm_service.GuardrailUnavailableError):
+        await llm_service.apply_guardrail_to_messages([
+            {"role": "user", "content": "hello"},
+        ])
 
 
 @pytest.mark.asyncio

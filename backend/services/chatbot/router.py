@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from database.postgres import get_db
 import database.mongo as mongo_module
+from .llm import GuardrailUnavailableError, apply_guardrail_to_messages
 from .masking import mask_messages, mask_sensitive_text
 from .schema import (
     AcknowledgementRequest,
@@ -29,6 +30,9 @@ HEARTBEAT_INTERVAL_SECONDS = float(os.getenv("CHAT_STREAM_HEARTBEAT_SECONDS", "1
 # Sentinel yielded when the upstream model produced nothing for a whole
 # heartbeat interval, so the SSE connection stays warm.
 _HEARTBEAT = object()
+GUARDRAIL_FAILURE_MESSAGE = (
+    "Sorry, we are unable to process your input at the moment. Please try again later."
+)
 
 
 def _to_sse_frame(chunk: str) -> str:
@@ -171,6 +175,17 @@ async def chatbot(
     messages = [{"role": m.role, "content": m.content} for m in request.messages]
     if mode == "general_enquiry":
         messages = mask_messages(messages)
+        try:
+            guardrail_result = await apply_guardrail_to_messages(messages)
+        except GuardrailUnavailableError as exc:
+            raise HTTPException(status_code=503, detail=GUARDRAIL_FAILURE_MESSAGE) from exc
+
+        if guardrail_result.get("blocked"):
+            blocked_message = str(guardrail_result.get("message") or "").strip()
+            if not blocked_message:
+                blocked_message = "Your request could not be processed."
+            raise HTTPException(status_code=400, detail=blocked_message)
+
     latest_user_message = _latest_user_message(messages)
     session_id = request.session_id or f"ge-{uuid.uuid4().hex}"
     should_log = mode == "general_enquiry" and bool(latest_user_message)

@@ -4,6 +4,7 @@ import asyncio
 import pytest
 from sqlalchemy import select
 
+from services.chatbot.llm import GuardrailUnavailableError
 from services.chatbot.model import ChatExchangeLog
 
 pytestmark = pytest.mark.integration
@@ -17,6 +18,10 @@ def test_chat_returns_mocked_reply(client, monkeypatch):
         return "A cataract is a clouding of the eye's lens."
 
     monkeypatch.setattr("services.chatbot.router.chat", fake_chat)
+    monkeypatch.setattr(
+        "services.chatbot.router.apply_guardrail_to_messages",
+        lambda messages: asyncio.sleep(0, result={"blocked": False, "message": ""}),
+    )
 
     resp = client.post(
         "/api/chat",
@@ -31,6 +36,10 @@ def test_chat_logs_general_enquiry_exchange_with_session_id(client, monkeypatch,
         return "A cataract is a clouding of the eye's lens."
 
     monkeypatch.setattr("services.chatbot.router.chat", fake_chat)
+    monkeypatch.setattr(
+        "services.chatbot.router.apply_guardrail_to_messages",
+        lambda messages: asyncio.sleep(0, result={"blocked": False, "message": ""}),
+    )
 
     resp = client.post(
         "/api/chat",
@@ -62,6 +71,10 @@ def test_chat_masks_sensitive_input_before_routing_and_logging(client, monkeypat
         return "Captured: Call me at +65******67 on 2*-0*-19**"
 
     monkeypatch.setattr("services.chatbot.router.chat", fake_chat)
+    monkeypatch.setattr(
+        "services.chatbot.router.apply_guardrail_to_messages",
+        lambda messages: asyncio.sleep(0, result={"blocked": False, "message": ""}),
+    )
 
     resp = client.post(
         "/api/chat",
@@ -145,6 +158,10 @@ def test_chat_stream_returns_sse_frames(client, monkeypatch):
         yield " is a clouding"
 
     monkeypatch.setattr("services.chatbot.router.chat_stream", fake_chat_stream)
+    monkeypatch.setattr(
+        "services.chatbot.router.apply_guardrail_to_messages",
+        lambda messages: asyncio.sleep(0, result={"blocked": False, "message": ""}),
+    )
 
     with client.stream(
         "POST",
@@ -169,6 +186,10 @@ def test_chat_stream_emits_heartbeat_events(client, monkeypatch):
 
     monkeypatch.setattr("services.chatbot.router.chat_stream", fake_chat_stream)
     monkeypatch.setattr("services.chatbot.router.HEARTBEAT_INTERVAL_SECONDS", 0.01)
+    monkeypatch.setattr(
+        "services.chatbot.router.apply_guardrail_to_messages",
+        lambda messages: asyncio.sleep(0, result={"blocked": False, "message": ""}),
+    )
 
     with client.stream(
         "POST",
@@ -181,3 +202,90 @@ def test_chat_stream_emits_heartbeat_events(client, monkeypatch):
     assert "event: heartbeat" in body
     assert "data: ping" in body
     assert "data: token" in body
+
+
+def test_chat_general_enquiry_blocked_returns_guardrail_message_and_skips_chat(client, monkeypatch):
+    async def fake_guardrail(messages):
+        return {"blocked": True, "message": "Please remove sensitive medical details."}
+
+    async def fake_chat(messages):
+        raise AssertionError("chat should not be called when guardrail blocks")
+
+    monkeypatch.setattr("services.chatbot.router.apply_guardrail_to_messages", fake_guardrail)
+    monkeypatch.setattr("services.chatbot.router.chat", fake_chat)
+
+    resp = client.post(
+        "/api/chat",
+        json={
+            "messages": [{"role": "user", "content": "Some blocked content"}],
+            "mode": "general_enquiry",
+        },
+    )
+
+    assert resp.status_code == 400
+    assert resp.json() == {"detail": "Please remove sensitive medical details."}
+
+
+def test_chat_general_enquiry_guardrail_failure_returns_exact_fallback_and_skips_chat(client, monkeypatch):
+    async def fake_guardrail(messages):
+        raise GuardrailUnavailableError("upstream failure")
+
+    async def fake_chat(messages):
+        raise AssertionError("chat should not be called when guardrail fails")
+
+    monkeypatch.setattr("services.chatbot.router.apply_guardrail_to_messages", fake_guardrail)
+    monkeypatch.setattr("services.chatbot.router.chat", fake_chat)
+
+    resp = client.post(
+        "/api/chat",
+        json={
+            "messages": [{"role": "user", "content": "hello"}],
+            "mode": "general_enquiry",
+        },
+    )
+
+    assert resp.status_code == 503
+    assert resp.json() == {
+        "detail": "Sorry, we are unable to process your input at the moment. Please try again later."
+    }
+
+
+def test_chat_stream_blocked_returns_json_error_without_sse(client, monkeypatch):
+    async def fake_guardrail(messages):
+        return {"blocked": True, "message": "Blocked by policy."}
+
+    monkeypatch.setattr("services.chatbot.router.apply_guardrail_to_messages", fake_guardrail)
+
+    resp = client.post(
+        "/api/chat?stream=true",
+        json={
+            "messages": [{"role": "user", "content": "hello"}],
+            "mode": "general_enquiry",
+        },
+    )
+
+    assert resp.status_code == 400
+    assert "application/json" in resp.headers.get("content-type", "")
+    assert resp.json() == {"detail": "Blocked by policy."}
+
+
+def test_chat_non_general_mode_bypasses_guardrail(client, monkeypatch):
+    async def fake_guardrail(messages):
+        raise AssertionError("guardrail should not run for non-general mode")
+
+    async def fake_chat(messages):
+        return "ok"
+
+    monkeypatch.setattr("services.chatbot.router.apply_guardrail_to_messages", fake_guardrail)
+    monkeypatch.setattr("services.chatbot.router.chat", fake_chat)
+
+    resp = client.post(
+        "/api/chat",
+        json={
+            "messages": [{"role": "user", "content": "hello"}],
+            "mode": "post_operation",
+        },
+    )
+
+    assert resp.status_code == 200
+    assert resp.json() == {"reply": "ok"}
