@@ -66,27 +66,59 @@ _SUPPORTED_LANGUAGES = {"en", "zh", "ms", "ta"}
 _ESCALATION_TEXT = {
     "en": {
         "base": "Your symptoms may require urgent attention.",
-        "detected": "Detected",
-        "reason": "Reason",
-        "hotline": "Please contact {hotline} immediately for medical advice.",
+        "hotline": (
+            "During office hours (8:30am to 5:30pm, weekdays):\n"
+            "- Please call 81263632\n\n"
+            "After office hours (including weekends and public holidays):\n"
+            "- Call eye doctor on call via TTSH operator at 6256 6011 OR\n"
+            "- Walk in to TTSH Emergency Department (together with this information sheet at)\n\n"
+            "Tan Tock Seng Hospital\n"
+            "Basement 1\n"
+            "11 Jalan Tan Tock Seng\n"
+            "Singapore 308433"
+        ),
     },
     "zh": {
         "base": "您的症状可能需要紧急处理。",
-        "detected": "检测到",
-        "reason": "原因",
-        "hotline": "请立即联系 {hotline} 获取医疗建议。",
+        "hotline": (
+            "办公时间（工作日 8:30am 至 5:30pm）：\n"
+            "- 请致电 81263632\n\n"
+            "非办公时间（包括周末及公共假期）：\n"
+            "- 请通过 TTSH 总机 6256 6011 联系眼科值班医生，或\n"
+            "- 请携带此信息单前往 TTSH 急诊部\n\n"
+            "陈笃生医院\n"
+            "B1 层\n"
+            "11 Jalan Tan Tock Seng\n"
+            "Singapore 308433"
+        ),
     },
     "ms": {
         "base": "Gejala anda mungkin memerlukan perhatian segera.",
-        "detected": "Dikesan",
-        "reason": "Sebab",
-        "hotline": "Sila hubungi {hotline} dengan segera untuk nasihat perubatan.",
+        "hotline": (
+            "Semasa waktu pejabat (8:30 pagi hingga 5:30 petang, hari bekerja):\n"
+            "- Sila hubungi 81263632\n\n"
+            "Selepas waktu pejabat (termasuk hujung minggu dan cuti umum):\n"
+            "- Hubungi doktor mata bertugas melalui operator TTSH di 6256 6011 ATAU\n"
+            "- Datang terus ke Jabatan Kecemasan TTSH (bawa helaian maklumat ini bersama)\n\n"
+            "Tan Tock Seng Hospital\n"
+            "Aras Basement 1\n"
+            "11 Jalan Tan Tock Seng\n"
+            "Singapore 308433"
+        ),
     },
     "ta": {
         "base": "உங்கள் அறிகுறிகளுக்கு அவசர கவனம் தேவைப்படலாம்.",
-        "detected": "கண்டறியப்பட்டது",
-        "reason": "காரணம்",
-        "hotline": "மருத்துவ ஆலோசனைக்காக உடனடியாக {hotline} ஐ தொடர்புகொள்ளவும்.",
+        "hotline": (
+            "அலுவலக நேரத்தில் (கிழமைகள், காலை 8:30 முதல் மாலை 5:30 வரை):\n"
+            "- தயவுசெய்து 81263632 என்ற எண்ணிற்கு அழைக்கவும்\n\n"
+            "அலுவலக நேரத்திற்குப் பிறகு (வார இறுதி மற்றும் பொது விடுமுறைகள் உட்பட):\n"
+            "- TTSH ஆபரேட்டர் 6256 6011 மூலம் கண் மருத்துவர் (on-call) ஐ தொடர்புகொள்ளவும் அல்லது\n"
+            "- இந்த தகவல் தாளை எடுத்துக்கொண்டு TTSH அவசர சிகிச்சைப் பிரிவிற்கு நேரடியாக செல்லவும்\n\n"
+            "Tan Tock Seng Hospital\n"
+            "Basement 1\n"
+            "11 Jalan Tan Tock Seng\n"
+            "Singapore 308433"
+        ),
     },
 }
 
@@ -136,12 +168,9 @@ def _extract_language_from_prompt(prompt: str) -> str:
     return "en"
 
 
-def _build_escalation_response(*, language: str, hotline: str, detected: list[str], reason: str) -> str:
+def _build_escalation_response(*, language: str) -> str:
     copy = _ESCALATION_TEXT.get(language, _ESCALATION_TEXT["en"])
-    details = f" {copy['detected']}: {', '.join(detected)}." if detected else ""
-    reason_text = f" {copy['reason']}: {reason}." if reason else ""
-    hotline_text = copy["hotline"].format(hotline=hotline)
-    return f"{copy['base']}{details}{reason_text} {hotline_text}"
+    return f"{copy['base']}\n\n{copy['hotline']}"
 
 
 def _escalate_node(state: CoordinatorState) -> CoordinatorState:
@@ -156,20 +185,10 @@ def _escalate_node(state: CoordinatorState) -> CoordinatorState:
 
     should_escalate = bool(keyword_hits) or bool(model_decision.get("escalate", False))
     if should_escalate:
-        hotline = os.getenv("MEDICAL_HOTLINE_CONTACT", "your medical hotline")
-        detected = keyword_hits + [
-            term for term in model_decision.get("detected_terms", []) if term not in keyword_hits
-        ]
-        reason = str(model_decision.get("reason", "")).strip()
         return {
             "route": "escalate",
             "kb_query": query,
-            "response": _build_escalation_response(
-                language=language,
-                hotline=hotline,
-                detected=detected,
-                reason=reason,
-            ),
+            "response": _build_escalation_response(language=language),
         }
 
     logger.info("Escalation check passed. Proceeding to triage.")

@@ -87,14 +87,15 @@ def test_parse_escalation_decision_defaults_on_unusable_output(raw):
 # ── _escalate_node ────────────────────────────────────────────────────────────
 def test_escalate_node_escalates_on_keyword_hit(monkeypatch):
     monkeypatch.setattr(coordinator_agent, "invoke_model", lambda _s, _u: _NO_ESCALATION)
-    monkeypatch.setenv("MEDICAL_HOTLINE_CONTACT", "1800-EYE-HELP")
 
     out = coordinator_agent._escalate_node({"prompt": "USER: I see pus in my eye"})
 
     assert out["route"] == "escalate"
     assert out["kb_query"] == "I see pus in my eye"
-    assert "Detected: pus." in out["response"]
-    assert "1800-EYE-HELP" in out["response"]
+    assert "Detected:" not in out["response"]
+    assert "Reason:" not in out["response"]
+    assert "Please call 81263632" in out["response"]
+    assert "TTSH operator at 6256 6011" in out["response"]
 
 
 def test_escalate_node_escalates_on_model_decision(monkeypatch):
@@ -104,8 +105,8 @@ def test_escalate_node_escalates_on_model_decision(monkeypatch):
     out = coordinator_agent._escalate_node({"prompt": "USER: everything went dark"})
 
     assert out["route"] == "escalate"
-    assert "Detected: sudden vision loss." in out["response"]
-    assert "Reason: acute worsening." in out["response"]
+    assert "Detected:" not in out["response"]
+    assert "Reason:" not in out["response"]
 
 
 def test_escalate_node_does_not_duplicate_detected_terms(monkeypatch):
@@ -114,7 +115,7 @@ def test_escalate_node_does_not_duplicate_detected_terms(monkeypatch):
 
     out = coordinator_agent._escalate_node({"prompt": "USER: pus discharge"})
 
-    assert "Detected: pus." in out["response"]
+    assert "Detected:" not in out["response"]
     assert "Reason:" not in out["response"]
 
 
@@ -124,7 +125,8 @@ def test_escalate_node_uses_default_hotline(monkeypatch):
 
     out = coordinator_agent._escalate_node({"prompt": "USER: cloudy cornea today"})
 
-    assert "your medical hotline" in out["response"]
+    assert "Please call 81263632" in out["response"]
+    assert "TTSH operator at 6256 6011" in out["response"]
 
 
 def test_escalate_node_passes_through_to_triage(no_escalation):
