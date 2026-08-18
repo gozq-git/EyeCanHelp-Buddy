@@ -7,12 +7,91 @@ from collections.abc import AsyncIterator
 import boto3
 import httpx
 
+
+class GuardrailUnavailableError(RuntimeError):
+    """Raised when guardrail evaluation cannot be completed."""
+
 CONTENT_TYPE_JSON = "application/json"
 CONTENT_TYPE_SSE = "text/event-stream"
 SSE_DATA_PREFIX = "data: "
 
 # Keys a JSON coordinator response may carry the reply text under, in priority order.
 JSON_TEXT_KEYS = ("response", "result", "output")
+
+
+def _latest_user_content(messages: list[dict]) -> str:
+    for msg in reversed(messages):
+        if str(msg.get("role", "")).strip().lower() != "user":
+            continue
+        content = str(msg.get("content", "")).strip()
+        if content:
+            return content
+    return ""
+
+
+def _extract_guardrail_output_message(response: dict) -> str:
+    outputs = response.get("outputs")
+    if isinstance(outputs, list):
+        for item in outputs:
+            if not isinstance(item, dict):
+                continue
+            text = item.get("text")
+            if isinstance(text, str) and text.strip():
+                return text.strip()
+            content = item.get("content")
+            if isinstance(content, list):
+                for part in content:
+                    if not isinstance(part, dict):
+                        continue
+                    part_text = part.get("text")
+                    if isinstance(part_text, dict):
+                        value = part_text.get("text")
+                        if isinstance(value, str) and value.strip():
+                            return value.strip()
+                    if isinstance(part_text, str) and part_text.strip():
+                        return part_text.strip()
+
+    top_level_output = response.get("output")
+    if isinstance(top_level_output, str) and top_level_output.strip():
+        return top_level_output.strip()
+    return ""
+
+
+async def apply_guardrail_to_messages(messages: list[dict]) -> dict[str, str | bool]:
+    guardrail_id = os.getenv("BEDROCK_GUARDRAIL_ID", "").strip()
+    guardrail_version = os.getenv("BEDROCK_GUARDRAIL_VERSION", "").strip()
+    if not guardrail_id or not guardrail_version:
+        raise GuardrailUnavailableError("Bedrock guardrail configuration is missing.")
+
+    user_text = _latest_user_content(messages)
+    if not user_text:
+        return {"blocked": False, "message": ""}
+
+    region = (
+        os.getenv("BEDROCK_GUARDRAIL_REGION", "").strip()
+        or os.getenv("AWS_REGION", "").strip()
+        or os.getenv("AWS_DEFAULT_REGION", "").strip()
+        or "us-east-1"
+    )
+
+    client = boto3.client("bedrock-runtime", region_name=region)
+    try:
+        response = await asyncio.to_thread(
+            client.apply_guardrail,
+            guardrailIdentifier=guardrail_id,
+            guardrailVersion=guardrail_version,
+            source="INPUT",
+            content=[{"text": {"text": user_text}}],
+        )
+    except Exception as exc:
+        raise GuardrailUnavailableError("Unable to evaluate guardrail.") from exc
+
+    action = str(response.get("action", "")).strip().upper()
+    blocked = action == "GUARDRAIL_INTERVENED"
+    return {
+        "blocked": blocked,
+        "message": _extract_guardrail_output_message(response),
+    }
 
 
 def _normalize_language(language: str | None) -> str:
