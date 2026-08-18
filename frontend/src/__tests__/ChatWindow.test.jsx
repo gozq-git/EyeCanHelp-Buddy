@@ -162,6 +162,19 @@ describe('ChatWindow — General Enquiry flow', () => {
     expect(messages.some(m => m.role === 'user' && m.content === 'What is AMD?')).toBe(true)
   })
 
+  it('masks sensitive chat input before display and before API payload', async () => {
+    render(<ChatWindow />)
+    await userEvent.click(screen.getByRole('button', { name: 'General Enquiry' }))
+    await userEvent.type(screen.getByRole('textbox'), 'Call +6591234567 on 25-03-1965')
+    await userEvent.keyboard('{Enter}')
+
+    expect(screen.getByText('Call +65******67 on 2*-0*-19**')).toBeInTheDocument()
+
+    await waitFor(() => expect(sendChatMessageStream).toHaveBeenCalled())
+    const [messages] = sendChatMessageStream.mock.calls[0]
+    expect(messages.some(m => m.role === 'user' && m.content === 'Call +65******67 on 2*-0*-19**')).toBe(true)
+  })
+
   it('shows error message in chat when sendChatMessage rejects', async () => {
     sendChatMessageStream.mockRejectedValueOnce(new Error('Stream failed'))
     sendChatMessage.mockRejectedValueOnce(new Error('Network error'))

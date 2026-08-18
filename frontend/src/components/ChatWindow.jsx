@@ -3,6 +3,7 @@ import MessageBubble from './MessageBubble'
 import EyeLogoSVG from './EyeLogoSVG'
 import { sendChatMessage, sendChatMessageStream, submitAcknowledgement, getEpicRecord, getPatient, createPatient, getLatestAcknowledgement, calculateBill, enqueueAppointmentNotification } from '../api/client'
 import { formatCopy, getCopy, PAYMENT_OPTIONS } from '../i18n/nonGeneralCopy'
+import { maskSensitiveText } from '../utils/sensitiveMasking'
 
 let _msgId = 1
 const nextId = () => ++_msgId
@@ -397,11 +398,12 @@ export default function ChatWindow({ onBack, language = 'en' }) {
   }
 
   const handleRegistration = async (text) => {
+    const rawText = String(text || '').trim()
     setInput('')
-    addMsg({ role: 'user', type: 'text', content: text })
+    addMsg({ role: 'user', type: 'text', content: rawText })
 
     if (regStep === 'name') {
-      const name = text.trim()
+      const name = rawText
       const validNamePattern = /^[A-Za-z .'-]{1,255}$/
       // TBL_PATIENT.patient_name is varchar(255)
       if (!validNamePattern.test(name) || !/[A-Za-z]/.test(name)) {
@@ -412,7 +414,7 @@ export default function ChatWindow({ onBack, language = 'en' }) {
       setRegStep('dob')
       addMsg({ role: 'bot', type: 'text', content: tr('askDob') })
     } else if (regStep === 'dob') {
-      const dob = text.trim()
+      const dob = rawText
       const m = dob.match(/^(\d{2})-(\d{2})-(\d{4})$/)
       if (!m) {
         addMsg({ role: 'bot', type: 'text', content: tr('invalidDobFormat') })
@@ -430,13 +432,17 @@ export default function ChatWindow({ onBack, language = 'en' }) {
       setRegStep('phone')
       addMsg({ role: 'bot', type: 'text', content: tr('askPhone') })
     } else if (regStep === 'phone') {
-      const phone = text.trim()
+      const phone = rawText
       // TBL_PATIENT.phone_number is varchar(20); allow optional leading '+'
       if (!/^\+?\d+$/.test(phone) || phone.length > 20) {
         addMsg({ role: 'bot', type: 'text', content: tr('invalidPhone') })
         return
       }
-      const finalData = { ...regData, phone_number: phone }
+      const finalData = {
+        ...regData,
+        patient_dob: regData.patient_dob,
+        phone_number: phone,
+      }
       setLoading(true)
       try {
         await createPatient(finalData)
@@ -787,30 +793,33 @@ export default function ChatWindow({ onBack, language = 'en' }) {
   }
 
   const handleSend = async () => {
-    const text = input.trim()
-    if (!text || loading) return
+    const rawText = input.trim()
+    if (!rawText || loading) return
     setInput('')
 
     if (regStep) {
-      handleRegistration(text)
+      handleRegistration(rawText)
       return
     }
 
     if (mode === 'pre_procedure') {
       if (preProcStep !== 'login' && preProcStep !== 'complete') {
-        handlePreProcAnswer(text)
+        handlePreProcAnswer(rawText)
       }
       return
     }
 
+    const shouldMask = mode === 'general_enquiry' || mode === 'welcome'
+    const outboundText = shouldMask ? maskSensitiveText(rawText) : rawText
+
     if (mode === 'welcome') setMode('general_enquiry')
 
-    addMsg({ role: 'user', type: 'text', content: text })
+    addMsg({ role: 'user', type: 'text', content: outboundText })
     setLoading(true)
     setStreamHeartbeatCount(0)
     setShowThinkingBubble(true)
 
-    const history = [...messages, { role: 'user', type: 'text', content: text }]
+    const history = [...messages, { role: 'user', type: 'text', content: outboundText }]
       .filter(m => m.type === 'text')
       .map(m => ({ role: m.role === 'bot' ? 'assistant' : 'user', content: m.content }))
 
