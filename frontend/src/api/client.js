@@ -54,6 +54,25 @@ const findFrameBoundary = (buffer) => {
 const frameSeparatorLength = (buffer, boundary) =>
   buffer.startsWith('\r\n\r\n', boundary) ? 4 : 2
 
+const buildErrorMessageFromPayload = (payload) => {
+  if (!payload) return ''
+  if (typeof payload === 'string') {
+    return payload.trim()
+  }
+  if (typeof payload === 'object') {
+    if (typeof payload.detail === 'string' && payload.detail.trim()) {
+      return payload.detail.trim()
+    }
+    if (typeof payload.message === 'string' && payload.message.trim()) {
+      return payload.message.trim()
+    }
+    if (typeof payload.error === 'string' && payload.error.trim()) {
+      return payload.error.trim()
+    }
+  }
+  return ''
+}
+
 export const sendChatMessageStream = async (messages, options = {}) => {
   const { onChunk, onHeartbeat, signal, sessionId, mode, language } = options
   const payload = {
@@ -73,7 +92,26 @@ export const sendChatMessageStream = async (messages, options = {}) => {
   })
 
   if (!response.ok) {
-    throw new Error(`Streaming request failed: ${response.status}`)
+    const contentType = response.headers.get('content-type') || ''
+    let message = ''
+    try {
+      if (contentType.includes('application/json')) {
+        message = buildErrorMessageFromPayload(await response.json())
+      } else {
+        const text = await response.text()
+        try {
+          message = buildErrorMessageFromPayload(JSON.parse(text)) || text.trim()
+        } catch {
+          message = text.trim()
+        }
+      }
+    } catch {
+      message = ''
+    }
+
+    const error = new Error(message || `Streaming request failed: ${response.status}`)
+    error.status = response.status
+    throw error
   }
 
   const contentType = response.headers.get('content-type') || ''

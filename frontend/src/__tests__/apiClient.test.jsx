@@ -180,4 +180,23 @@ describe('api client', () => {
       global.fetch = originalFetch
     }
   })
+
+  it('surfaces backend detail message for non-OK stream responses', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 400,
+      headers: { get: () => 'application/json' },
+      json: async () => ({ detail: 'Please remove sensitive medical details.' }),
+    })
+
+    const originalFetch = global.fetch
+    global.fetch = fetchMock
+
+    try {
+      await expect(sendChatMessageStream([{ role: 'user', content: 'hi' }]))
+        .rejects.toMatchObject({ message: 'Please remove sensitive medical details.', status: 400 })
+    } finally {
+      global.fetch = originalFetch
+    }
+  })
 })

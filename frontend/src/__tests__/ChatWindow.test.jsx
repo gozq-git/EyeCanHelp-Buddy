@@ -175,7 +175,7 @@ describe('ChatWindow — General Enquiry flow', () => {
     expect(messages.some(m => m.role === 'user' && m.content === 'Call +65******67 on 2*-0*-19**')).toBe(true)
   })
 
-  it('shows error message in chat when sendChatMessage rejects', async () => {
+  it('shows fallback error message in chat when sendChatMessage rejects', async () => {
     sendChatMessageStream.mockRejectedValueOnce(new Error('Stream failed'))
     sendChatMessage.mockRejectedValueOnce(new Error('Network error'))
     render(<ChatWindow />)
@@ -183,8 +183,24 @@ describe('ChatWindow — General Enquiry flow', () => {
     await userEvent.type(screen.getByRole('textbox'), 'test question')
     await userEvent.keyboard('{Enter}')
     await waitFor(() => {
-      expect(screen.getByText(/encountered an error/i)).toBeInTheDocument()
+      expect(screen.getByText('Network error')).toBeInTheDocument()
     })
+  })
+
+  it('shows backend blocked message from stream 400 response', async () => {
+    const blockedError = new Error('Please remove sensitive medical details.')
+    blockedError.status = 400
+    sendChatMessageStream.mockRejectedValueOnce(blockedError)
+
+    render(<ChatWindow />)
+    await userEvent.click(screen.getByRole('button', { name: 'General Enquiry' }))
+    await userEvent.type(screen.getByRole('textbox'), 'offensive text')
+    await userEvent.keyboard('{Enter}')
+
+    await waitFor(() => {
+      expect(screen.getByText('Please remove sensitive medical details.')).toBeInTheDocument()
+    })
+    expect(sendChatMessage).not.toHaveBeenCalled()
   })
 
   it('input is cleared after sending a message', async () => {

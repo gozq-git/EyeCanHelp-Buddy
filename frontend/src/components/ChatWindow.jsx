@@ -77,6 +77,26 @@ function formatDate(iso) {
   }
 }
 
+const DEFAULT_CHAT_ERROR_MESSAGE = 'Sorry, I encountered an error. Please try again.'
+
+const extractApiErrorMessage = (error, fallback = DEFAULT_CHAT_ERROR_MESSAGE) => {
+  const detail = error?.response?.data?.detail
+  if (typeof detail === 'string' && detail.trim()) {
+    return detail.trim()
+  }
+
+  const message = error?.message
+  if (typeof message === 'string' && message.trim()) {
+    const trimmed = message.trim()
+    // Keep status-only transport messages out of chat bubbles.
+    if (!/^Streaming request failed:\s*\d+$/.test(trimmed)) {
+      return trimmed
+    }
+  }
+
+  return fallback
+}
+
 const chipBtn = {
   padding: '8px 20px',
   borderRadius: '20px',
@@ -863,6 +883,15 @@ export default function ChatWindow({ onBack, language = 'en' }) {
 
       setShowThinkingBubble(false)
 
+      const streamStatus = Number(streamError?.status || streamError?.response?.status || 0)
+      if (streamStatus === 400 || streamStatus === 503) {
+        if (placeholderId !== null) {
+          removeMsg(placeholderId)
+        }
+        addMsg({ role: 'bot', type: 'text', content: extractApiErrorMessage(streamError) })
+        return
+      }
+
       try {
         const res = await sendChatMessage(history, {
           sessionId: generalEnquirySessionIdRef.current,
@@ -874,11 +903,11 @@ export default function ChatWindow({ onBack, language = 'en' }) {
         } else {
           addMsg({ role: 'bot', type: 'text', content: res.data.reply })
         }
-      } catch {
+        } catch (fallbackError) {
         if (placeholderId !== null) {
           removeMsg(placeholderId)
         }
-        addMsg({ role: 'bot', type: 'text', content: 'Sorry, I encountered an error. Please try again.' })
+          addMsg({ role: 'bot', type: 'text', content: extractApiErrorMessage(fallbackError) })
       }
     } finally {
       if (streamAbortRef.current === controller) {
