@@ -289,3 +289,49 @@ def test_chat_non_general_mode_bypasses_guardrail(client, monkeypatch):
 
     assert resp.status_code == 200
     assert resp.json() == {"reply": "ok"}
+
+
+def test_chat_blocked_returns_localized_message_for_chinese(client, monkeypatch):
+    async def fake_guardrail(messages):
+        return {"blocked": True, "message": "English-only guardrail message."}
+
+    async def fake_chat(messages):
+        raise AssertionError("chat should not be called when guardrail blocks")
+
+    monkeypatch.setattr("services.chatbot.router.apply_guardrail_to_messages", fake_guardrail)
+    monkeypatch.setattr("services.chatbot.router.chat", fake_chat)
+
+    resp = client.post(
+        "/api/chat",
+        json={
+            "messages": [{"role": "user", "content": "你是笨蛋"}],
+            "mode": "general_enquiry",
+            "language": "zh",
+        },
+    )
+
+    assert resp.status_code == 400
+    assert resp.json() == {
+        "detail": "抱歉，我们无法处理您提供的输入。请检查您的输入，确保未包含任何敏感信息或有害、冒犯性或不适当的语言，然后重试。"
+    }
+
+
+def test_chat_guardrail_failure_returns_localized_fallback(client, monkeypatch):
+    async def fake_guardrail(messages):
+        raise GuardrailUnavailableError("upstream failure")
+
+    monkeypatch.setattr("services.chatbot.router.apply_guardrail_to_messages", fake_guardrail)
+
+    resp = client.post(
+        "/api/chat",
+        json={
+            "messages": [{"role": "user", "content": "hello"}],
+            "mode": "general_enquiry",
+            "language": "ms",
+        },
+    )
+
+    assert resp.status_code == 503
+    assert resp.json() == {
+        "detail": "Maaf, kami tidak dapat memproses input anda buat masa ini. Sila cuba lagi kemudian."
+    }
