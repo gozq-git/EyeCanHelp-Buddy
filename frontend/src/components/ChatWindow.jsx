@@ -448,7 +448,9 @@ export default function ChatWindow({ onBack, language = 'en' }) {
         addMsg({ role: 'bot', type: 'text', content: tr('invalidDobValue') })
         return
       }
-      setRegData(prev => ({ ...prev, patient_dob: dob }))
+      // Backend expects ISO date (YYYY-MM-DD); user enters DD-MM-YYYY
+      const dobIso = `${m[3]}-${m[2]}-${m[1]}`
+      setRegData(prev => ({ ...prev, patient_dob: dobIso }))
       setRegStep('phone')
       addMsg({ role: 'bot', type: 'text', content: tr('askPhone') })
     } else if (regStep === 'phone') {

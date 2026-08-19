@@ -33,6 +33,44 @@ _HEARTBEAT = object()
 GUARDRAIL_FAILURE_MESSAGE = (
     "Sorry, we are unable to process your input at the moment. Please try again later."
 )
+GUARDRAIL_FAILURE_MESSAGES = {
+    "en": GUARDRAIL_FAILURE_MESSAGE,
+    "zh": "抱歉，我们暂时无法处理您的输入。请稍后重试。",
+    "ms": "Maaf, kami tidak dapat memproses input anda buat masa ini. Sila cuba lagi kemudian.",
+    "ta": "மன்னிக்கவும், தற்போது உங்கள் உள்ளீட்டைச் செயலாக்க முடியவில்லை. பின்னர் மீண்டும் முயற்சிக்கவும்.",
+}
+GUARDRAIL_BLOCKED_DEFAULT_MESSAGE = "Your request could not be processed."
+GUARDRAIL_BLOCKED_MESSAGES = {
+    "zh": "抱歉，我们无法处理您提供的输入。请检查您的输入，确保未包含任何敏感信息或有害、冒犯性或不适当的语言，然后重试。",
+    "ms": "Maaf, kami tidak dapat memproses input anda seperti yang diberikan. Sila semak input anda dan pastikan ia tidak mengandungi sebarang maklumat sensitif atau bahasa yang berbahaya, menyinggung perasaan atau tidak wajar, kemudian cuba lagi.",
+    "ta": "மன்னிக்கவும், நீங்கள் வழங்கிய உள்ளீட்டைச் செயலாக்க முடியவில்லை. உங்கள் உள்ளீட்டில் எந்த உணர்திறன் தகவலும் அல்லது தீங்கிழைக்கும், புண்படுத்தும் அல்லது பொருத்தமற்ற மொழியும் இல்லை என்பதை உறுதிப்படுத்திய பிறகு மீண்டும் முயற்சிக்கவும்.",
+}
+
+
+def _normalize_language(language: str | None) -> str:
+    value = (language or "").strip().lower()
+    return value if value in {"en", "zh", "ms", "ta"} else "en"
+
+
+def _guardrail_failure_message(language: str | None) -> str:
+    return GUARDRAIL_FAILURE_MESSAGES.get(
+        _normalize_language(language), GUARDRAIL_FAILURE_MESSAGE
+    )
+
+
+def _guardrail_blocked_message(guardrail_message: str, language: str | None) -> str:
+    """Return the blocked notice in the user's language.
+
+    The Bedrock guardrail's configured blocked message is English-only, so
+    for non-English requests we substitute a localized equivalent. For
+    English we keep the guardrail-provided text when available.
+    """
+    normalized = _normalize_language(language)
+    if normalized == "en":
+        return guardrail_message or GUARDRAIL_BLOCKED_DEFAULT_MESSAGE
+    return GUARDRAIL_BLOCKED_MESSAGES.get(normalized, guardrail_message) or (
+        guardrail_message or GUARDRAIL_BLOCKED_DEFAULT_MESSAGE
+    )
 
 
 def _to_sse_frame(chunk: str) -> str:
@@ -178,12 +216,16 @@ async def chatbot(
         try:
             guardrail_result = await apply_guardrail_to_messages(messages)
         except GuardrailUnavailableError as exc:
-            raise HTTPException(status_code=503, detail=GUARDRAIL_FAILURE_MESSAGE) from exc
+            raise HTTPException(
+                status_code=503,
+                detail=_guardrail_failure_message(request.language),
+            ) from exc
 
         if guardrail_result.get("blocked"):
-            blocked_message = str(guardrail_result.get("message") or "").strip()
-            if not blocked_message:
-                blocked_message = "Your request could not be processed."
+            blocked_message = _guardrail_blocked_message(
+                str(guardrail_result.get("message") or "").strip(),
+                request.language,
+            )
             raise HTTPException(status_code=400, detail=blocked_message)
 
     latest_user_message = _latest_user_message(messages)
