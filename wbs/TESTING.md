@@ -11,6 +11,7 @@ Docker container.
 | **Integration** (API) | pytest + FastAPI `TestClient` | `backend/tests/integration/` | (in `reports/backend/report.html`) |
 | **End-to-End** | Playwright | `e2e/tests/` | `reports/e2e/index.html` |
 | **Stress / Load** | Locust | `backend/tests/load/` | `reports/load/report.html` |
+| **LLM eval** (chatbot) | pytest + DeepEval | `backend/tests/eval/` | pytest stdout (opt-in; no artifact) |
 
 External dependencies are isolated: the LLM/AgentCore call is mocked, PostgreSQL
 is replaced by in-memory SQLite, and MongoDB by an in-process fake. E2E mocks the
@@ -83,6 +84,19 @@ cd backend
   --headless -u 50 -r 10 -t 30s --html ../reports/load/report.html
 # Drop --headless to open the Locust web UI at http://localhost:8089
 ```
+
+### LLM eval — general-enquiry chatbot (DeepEval)
+Opt-in suite that runs the **real** coordinator agent on AWS Bedrock against a
+golden dataset (`backend/tests/eval/datasets/general_enquiry_goldens.json`) and
+scores answers with a Bedrock judge model: relevancy, faithfulness to the KB,
+escalation/guardrail safety, triage routing, and multilingual fidelity. It is
+excluded from the default pytest run and skips cleanly without AWS credentials.
+```bash
+make test-eval                                   # from the repo root
+# or: cd backend && .venv/bin/python -m pytest tests/eval -m eval -v
+```
+See [`backend/tests/eval/README.md`](../backend/tests/eval/README.md) for the
+required env vars, cost notes, and how to add goldens.
 
 ---
 

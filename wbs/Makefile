@@ -1,7 +1,7 @@
 # EyeCanHelp Buddy — test & artifact targets
 # All reports land in ./reports and are served by `make reports`.
 
-.PHONY: help install test-all test-backend test-frontend test-e2e test-load reports reports-down
+.PHONY: help install test-all test-backend test-frontend test-e2e test-load test-eval reports reports-down
 
 help:
 	@echo "Targets:"
@@ -11,6 +11,7 @@ help:
 	@echo "  test-frontend  Frontend component tests (vitest) + coverage"
 	@echo "  test-e2e       End-to-end tests (Playwright, via Docker by default)"
 	@echo "  test-load      Stress/load tests (Locust)"
+	@echo "  test-eval      LLM evals for the chatbot (DeepEval; live Bedrock, needs AWS creds)"
 	@echo "  reports        Serve generated artifacts at http://localhost:8080"
 	@echo "  reports-down   Stop the reports server"
 
@@ -33,6 +34,9 @@ test-e2e:
 
 test-load:
 	./scripts/run-all-tests.sh load
+
+test-eval:
+	cd backend && .venv/bin/python -m pytest tests/eval -m eval -v
 
 reports:
 	docker compose up reports
