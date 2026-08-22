@@ -20,6 +20,7 @@ export const sendChatMessage = (messages, options = {}) => {
     ...(options.sessionId ? { session_id: options.sessionId } : {}),
     ...(options.mode ? { mode: options.mode } : {}),
     ...(options.language ? { language: options.language } : {}),
+    ...(options.patientId ? { patient_id: options.patientId } : {}),
   }
   return api.post('/chat', payload)
 }
@@ -74,12 +75,13 @@ const buildErrorMessageFromPayload = (payload) => {
 }
 
 export const sendChatMessageStream = async (messages, options = {}) => {
-  const { onChunk, onHeartbeat, signal, sessionId, mode, language } = options
+  const { onChunk, onHeartbeat, signal, sessionId, mode, language, patientId } = options
   const payload = {
     messages,
     ...(sessionId ? { session_id: sessionId } : {}),
     ...(mode ? { mode } : {}),
     ...(language ? { language } : {}),
+    ...(patientId ? { patient_id: patientId } : {}),
   }
   const response = await fetch('/api/chat?stream=true', {
     method: 'POST',

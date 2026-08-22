@@ -34,6 +34,7 @@ class ChatRequest(BaseModel):
     session_id: str | None = None
     mode: str | None = None
     language: str | None = None
+    patient_id: str | None = None
 
 
 class ChatResponse(BaseModel):

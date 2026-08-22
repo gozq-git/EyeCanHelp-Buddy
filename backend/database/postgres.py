@@ -34,6 +34,12 @@ async def init_db():
         await conn.execute(text("CREATE SCHEMA IF NOT EXISTS chatbot"))
         await conn.execute(text("CREATE SCHEMA IF NOT EXISTS billing"))
         await conn.run_sync(Base.metadata.create_all)
+        if getattr(getattr(conn, "dialect", None), "name", "") == "postgresql":
+            # create_all will not add columns to pre-existing tables.
+            await conn.execute(text(
+                'ALTER TABLE chatbot."TBL_CHAT_EXCHANGE_LOG" '
+                "ADD COLUMN IF NOT EXISTS patient_id VARCHAR(50)"
+            ))
     await _seed_db()
 
 

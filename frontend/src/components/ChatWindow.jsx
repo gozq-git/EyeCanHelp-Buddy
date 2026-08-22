@@ -855,6 +855,7 @@ export default function ChatWindow({ onBack, language = 'en' }) {
         sessionId: generalEnquirySessionIdRef.current,
         mode: 'general_enquiry',
         language,
+        patientId: currentPatientId,
         signal: controller.signal,
         onChunk: (chunk) => {
           if (!receivedStreamChunk) {
@@ -899,6 +900,7 @@ export default function ChatWindow({ onBack, language = 'en' }) {
           sessionId: generalEnquirySessionIdRef.current,
           mode: 'general_enquiry',
           language,
+          patientId: currentPatientId,
         })
         if (placeholderId !== null) {
           updateMsg(placeholderId, { content: res.data.reply })

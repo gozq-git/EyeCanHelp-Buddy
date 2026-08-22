@@ -63,6 +63,40 @@ def test_chat_logs_general_enquiry_exchange_with_session_id(client, monkeypatch,
     assert logs[0].mode == "general_enquiry"
     assert logs[0].user_message == "What is a cataract?"
     assert logs[0].system_response == "A cataract is a clouding of the eye's lens."
+    assert logs[0].patient_id is None
+
+
+def test_chat_logs_patient_id_when_patient_logged_in(client, monkeypatch, sqlite_sessionmaker):
+    async def fake_chat(messages):
+        return "A cataract is a clouding of the eye's lens."
+
+    monkeypatch.setattr("services.chatbot.router.chat", fake_chat)
+    monkeypatch.setattr(
+        "services.chatbot.router.apply_guardrail_to_messages",
+        lambda messages: asyncio.sleep(0, result={"blocked": False, "message": ""}),
+    )
+
+    resp = client.post(
+        "/api/chat",
+        json={
+            "messages": [{"role": "user", "content": "What is a cataract?"}],
+            "mode": "general_enquiry",
+            "session_id": "sess-patient-001",
+            "patient_id": "P001",
+        },
+    )
+    assert resp.status_code == 200
+
+    async def _fetch_logs():
+        async with sqlite_sessionmaker() as session:
+            result = await session.execute(
+                select(ChatExchangeLog).where(ChatExchangeLog.session_id == "sess-patient-001")
+            )
+            return result.scalars().all()
+
+    logs = asyncio.run(_fetch_logs())
+    assert len(logs) == 1
+    assert logs[0].patient_id == "P001"
 
 
 def test_chat_masks_sensitive_input_before_routing_and_logging(client, monkeypatch, sqlite_sessionmaker):
