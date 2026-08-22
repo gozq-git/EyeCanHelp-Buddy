@@ -3,7 +3,8 @@
 Design goals
 ------------
 * No external services. PostgreSQL is replaced by an in-memory SQLite engine
-  (aiosqlite); MongoDB by an in-process fake; the LLM/AgentCore call is mocked.
+  (synchronous sqlite3 with a thin async shim); MongoDB by an in-process fake;
+  the LLM/AgentCore call is mocked.
 * The FastAPI lifespan normally tries to init Postgres + Mongo on startup. We
   patch those to no-ops so the TestClient starts instantly and offline.
 """
@@ -17,20 +18,68 @@ if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
 import pytest
-import pytest_asyncio
-from sqlalchemy import JSON, text
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+from sqlalchemy import JSON, create_engine, text
+from sqlalchemy.orm import Session, sessionmaker
 
 
 # ──────────────────────────────────────────────────────────────────────────────
 # In-memory SQLite engine standing in for PostgreSQL
 # ──────────────────────────────────────────────────────────────────────────────
-@pytest_asyncio.fixture
-async def sqlite_sessionmaker():
-    """A fresh in-memory SQLite engine with all ORM tables created.
+class _AsyncSessionShim:
+    """Expose a synchronous Session through the AsyncSession API surface that
+    app code and tests use (add / execute / commit / refresh / async context
+    manager).
+
+    This replaces aiosqlite. aiosqlite runs every query on a worker thread,
+    and on Windows that thread repeatedly crashes with `Windows fatal
+    exception: access violation` when the test event loop closes — stalling a
+    15-test run for ~4-6 minutes. sqlite3 calls here are in-memory and
+    microsecond-fast, so blocking the event loop is a non-issue.
+    """
+
+    def __init__(self, session: Session):
+        self._session = session
+
+    def add(self, instance) -> None:
+        self._session.add(instance)
+
+    async def execute(self, statement, *args, **kwargs):
+        return self._session.execute(statement, *args, **kwargs)
+
+    async def commit(self) -> None:
+        self._session.commit()
+
+    async def refresh(self, instance) -> None:
+        self._session.refresh(instance)
+
+    async def close(self) -> None:
+        self._session.close()
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        self._session.close()
+        return False
+
+
+class _AsyncSessionmakerShim:
+    """Match the `async_sessionmaker` call pattern: `maker()` -> shim."""
+
+    def __init__(self, sync_maker: sessionmaker):
+        self._sync_maker = sync_maker
+
+    def __call__(self) -> _AsyncSessionShim:
+        return _AsyncSessionShim(self._sync_maker())
+
+
+@pytest.fixture(scope="session")
+def sqlite_engine():
+    """One shared synchronous in-memory SQLite engine for the test session.
 
     A StaticPool keeps a single shared connection so the in-memory DB persists
-    across sessions within one test.
+    across every test. Being synchronous, it has no event-loop affinity and no
+    aiosqlite worker threads, so it is safe to share session-wide.
     """
     from sqlalchemy.pool import StaticPool
     from database.postgres import Base
@@ -46,22 +95,34 @@ async def sqlite_sessionmaker():
             if column.type.__class__.__name__ == "JSONB":
                 column.type = JSON()
 
-    engine = create_async_engine(
-        "sqlite+aiosqlite://",
+    engine = create_engine(
+        "sqlite://",
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
-    async with engine.begin() as conn:
+    with engine.begin() as conn:
         # SQLite has no schemas; attach logical databases so schema-qualified
         # table names (patient/chatbot/billing) can still be created in tests.
-        await conn.execute(text("ATTACH DATABASE ':memory:' AS patient"))
-        await conn.execute(text("ATTACH DATABASE ':memory:' AS chatbot"))
-        await conn.execute(text("ATTACH DATABASE ':memory:' AS billing"))
-        await conn.run_sync(Base.metadata.create_all)
+        conn.execute(text("ATTACH DATABASE ':memory:' AS patient"))
+        conn.execute(text("ATTACH DATABASE ':memory:' AS chatbot"))
+        conn.execute(text("ATTACH DATABASE ':memory:' AS billing"))
+        Base.metadata.create_all(conn)
 
-    maker = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-    yield maker
-    await engine.dispose()
+    yield engine
+    engine.dispose()
+
+
+@pytest.fixture
+def sqlite_sessionmaker(sqlite_engine):
+    """An async-session-lookalike factory bound to the shared engine.
+
+    The in-memory DB is shared across tests. Rows inserted by one test are
+    visible to later tests, but every existing test queries by its own unique
+    session_id (or asserts an empty table for a mode that never writes), so
+    this isolation-by-key keeps them independent.
+    """
+    sync_maker = sessionmaker(sqlite_engine, class_=Session, expire_on_commit=False)
+    return _AsyncSessionmakerShim(sync_maker)
 
 
 # ──────────────────────────────────────────────────────────────────────────────

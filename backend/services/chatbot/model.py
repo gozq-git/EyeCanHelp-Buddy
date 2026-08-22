@@ -20,6 +20,7 @@ class ChatExchangeLog(Base):
 
 	id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 	session_id: Mapped[str] = mapped_column(String(100), index=True, nullable=False)
+	patient_id: Mapped[str | None] = mapped_column(String(50), nullable=True)
 	mode: Mapped[str] = mapped_column(String(50), nullable=False)
 	user_message: Mapped[str] = mapped_column(Text, nullable=False)
 	system_response: Mapped[str] = mapped_column(Text, nullable=False)

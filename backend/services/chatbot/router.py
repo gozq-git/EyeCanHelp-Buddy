@@ -103,6 +103,7 @@ async def _log_exchange_quietly(
     user_message: str,
     system_response: str,
     db: AsyncSession,
+    patient_id: str | None = None,
 ) -> None:
     """Persist the audit trail without ever failing the user-facing chat."""
     try:
@@ -112,6 +113,7 @@ async def _log_exchange_quietly(
             user_message=mask_sensitive_text(user_message),
             system_response=mask_sensitive_text(system_response),
             db=db,
+            patient_id=patient_id,
         )
     except Exception:
         # Do not fail user chat if audit logging fails.
@@ -177,6 +179,7 @@ async def _stream_chat_events(
     mode: str,
     user_message: str,
     db: AsyncSession,
+    patient_id: str | None = None,
 ):
     """Render the streamed reply as SSE frames and log the finished exchange."""
     streamed_reply = ""
@@ -196,6 +199,7 @@ async def _stream_chat_events(
                 user_message=user_message,
                 system_response=streamed_reply,
                 db=db,
+                patient_id=patient_id,
             )
         yield _to_sse_event("done", "[DONE]")
     except Exception as exc:
@@ -242,6 +246,7 @@ async def chatbot(
                 mode=mode,
                 user_message=latest_user_message,
                 db=db,
+                patient_id=request.patient_id,
             ),
             media_type="text/event-stream",
             headers={
@@ -259,6 +264,7 @@ async def chatbot(
             user_message=latest_user_message,
             system_response=reply,
             db=db,
+            patient_id=request.patient_id,
         )
     return ChatResponse(reply=reply)
 

@@ -30,9 +30,11 @@ async def save_chat_exchange(
 	user_message: str,
 	system_response: str,
 	db: AsyncSession,
+	patient_id: str | None = None,
 ) -> ChatExchangeLog:
 	record = ChatExchangeLog(
 		session_id=session_id,
+		patient_id=patient_id,
 		mode=mode,
 		user_message=user_message,
 		system_response=system_response,
