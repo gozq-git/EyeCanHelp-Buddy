@@ -6,6 +6,13 @@ pytest-cov==6.0.0
 pytest-html==4.1.1
 locust==2.32.5         # stress / load testing
 
+# LLM evaluation (tests/eval — opt-in, live Bedrock calls). aiobotocore is the
+# async client required by deepeval's AmazonBedrockModel judge. Pinned to the
+# newest release whose botocore range (>=1.39.9,<1.39.12) still satisfies the
+# boto3==1.39.0 pin in requirements.txt — newer aiobotocore needs botocore>=1.40.
+deepeval>=3.0
+aiobotocore==2.24.1
+
 # Coordinator agent runtime deps. Not needed by the backend service itself, but
 # agents/coordinator/{agent,main}.py import them at module scope, so the unit
 # tests cannot exercise those modules without them. Keep in sync with
