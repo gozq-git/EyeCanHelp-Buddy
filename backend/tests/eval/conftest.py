@@ -35,7 +35,7 @@ DEFAULT_JUDGE_MODEL = "global.anthropic.claude-sonnet-4-6"
 
 
 def aws_region() -> str:
-    return os.getenv("AWS_REGION") or os.getenv("AWS_DEFAULT_REGION") or "us-east-1"
+    return os.getenv("AWS_REGION") or os.getenv("AWS_DEFAULT_REGION") or "ap-southeast-1"
 
 
 @pytest.fixture(scope="session", autouse=True)

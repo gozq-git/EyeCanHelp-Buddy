@@ -235,7 +235,6 @@ EyeCanHelp-Buddy/
 │   │       ├── 02_mongo_poc_seed.js           # P001/P002 canonical EPIC records — staging only
 │   │       └── README.md                      # Run order, prod vs staging, verify steps
 │   └── tests/
-│       └── test_multi_agent.py        # Integration test: coordinator + specialists
 │
 ├── docker-compose.yml                 # Defines backend (port 8000) + frontend (port 3000) services
 └── wbs/                               # Work Breakdown Structure docs

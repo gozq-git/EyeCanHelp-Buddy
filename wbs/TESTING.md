@@ -117,7 +117,5 @@ Generated reports are git-ignored; only the page scaffolding
 
 ## Notes
 
-* `backend/tests/test_multi_agent.py` is a **manual** AgentCore runtime script
-  (needs live AWS ARNs) and is excluded from the automated pytest run.
 * CI (`.github/workflows/frontend-cicd.yml`) already runs the frontend tests on
   every push; backend pytest and the other levels can be wired in the same way.

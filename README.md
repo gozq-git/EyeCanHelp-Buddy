@@ -53,7 +53,7 @@ backend/
 │   │   ├── Dockerfile
 │   │   └── requirements.txt
 ├── tests/
-│   └── test_multi_agent.py
+
 ├── requirements.txt
 └── .env.example
 ```
@@ -135,17 +135,6 @@ docker run --rm -p 8080:8080 \
   -e FINANCIAL_AGENT_RUNTIME_ARN=arn:aws:bedrock-agentcore:...:runtime/... \
   -e HEALTHCARE_AGENT_RUNTIME_ARN=arn:aws:bedrock-agentcore:...:runtime/... \
   eyecanhelp-coordinator:local
-```
-
-## Testing
-
-Sample-style runtime test script is available at [backend/tests/test_multi_agent.py](backend/tests/test_multi_agent.py).
-
-Run:
-
-```powershell
-cd backend
-python tests/test_multi_agent.py <coordinator_runtime_arn> <financial_runtime_arn> <healthcare_runtime_arn>
 ```
 
 ## GitHub Actions -> AWS ECR

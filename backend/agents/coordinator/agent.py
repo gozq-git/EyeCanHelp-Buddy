@@ -2,7 +2,7 @@
 
 This module is deliberately minimal and stable. It owns only:
   1. ``escalate``    — an always-on clinical safety gate (never a plug-in).
-  2. ``llm_triage``  — routes to a specialist by name, using a prompt built
+  2. ``triage``      — routes to a specialist by name, using a prompt built
                        dynamically from the registered plug-ins' descriptions.
   3. graph assembly  — wires one node per registered :class:`Specialist`.
 
@@ -267,7 +267,7 @@ def create_agent():
 
     graph = StateGraph(CoordinatorState)
     graph.add_node("escalate", _escalate_node)
-    graph.add_node("llm_triage", _make_triage_node(specs))
+    graph.add_node("triage", _make_triage_node(specs))
 
     # One node per plug-in — the core does not name them explicitly.
     for spec in specs:
@@ -278,10 +278,10 @@ def create_agent():
     graph.add_conditional_edges(
         "escalate",
         _escalation_route_edge,
-        {"triage": "llm_triage", "escalate": END},
+        {"triage": "triage", "escalate": END},
     )
     graph.add_conditional_edges(
-        "llm_triage",
+        "triage",
         _triage_route_edge,
         {
             **{spec.name: spec.name for spec in specs},
