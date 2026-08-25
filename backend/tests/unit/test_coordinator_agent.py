@@ -280,7 +280,7 @@ def test_create_agent_compiles_a_graph_with_one_node_per_plugin():
     compiled = coordinator_agent.create_agent()
 
     nodes = set(compiled.get_graph().nodes)
-    assert {"escalate", "llm_triage", "healthcare", "financial"} <= nodes
+    assert {"escalate", "triage", "healthcare", "financial"} <= nodes
 
 
 def test_create_agent_rejects_an_empty_registry(monkeypatch):
