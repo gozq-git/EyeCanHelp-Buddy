@@ -1,7 +1,7 @@
 export const COPY = {
   en: {
-    proceedForm: 'To proceed with the form, would you please sign in below?\n\n**Disclaimer**: \nDo not use your official Singpass Login, use dummy numbers for the purpose of testing',
-    proceedChecklist: 'To proceed with the checklist, would you please sign in below?\n\n**Disclaimer**: \nDo not use your official Singpass Login, use dummy numbers for the purpose of testing',
+    proceedForm: 'To proceed with the form, would you please sign in below?\n\n**Disclaimer**: \nDo not use your official Singpass Login, use dummy numbers for the purpose of testing.',
+    proceedChecklist: 'To proceed with the checklist, would you please sign in below?\n\n**Disclaimer**: \nDo not use your official Singpass Login, use dummy numbers for the purpose of testing.',
     proceedAppointment: 'To book an appointment, would you please sign in below?',
     updateInfo: 'Would you like to update your information?\n• Yes / No',
     qStroke: 'Have you had a recent stroke or heart attack in the past 6 months?\n• Yes / No',

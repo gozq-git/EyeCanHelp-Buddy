@@ -929,6 +929,7 @@ export default function ChatWindow({ onBack, language = 'en' }) {
   const showEye = mode === 'pre_procedure' && preProcStep === 'q_eye'
   const showPaymentMode = mode === 'pre_procedure' && preProcStep === 'payment_mode'
   const showReturnMenu = mode === 'general_enquiry' || mode === 'appointment' || (mode === 'pre_procedure' && preProcStep === 'complete') || (mode === 'post_operation' && postOpStep === 'complete')
+  const hasChoiceChips = showYesNo || showScheme || showPerformer || showEye || showPaymentMode
   const inputDisabled = !regStep && (
     (mode === 'pre_procedure' && (preProcStep === 'login' || preProcStep === 'complete'))
     || (mode === 'post_operation' && (postOpStep === 'login' || postOpStep === 'complete'))
@@ -995,38 +996,40 @@ export default function ChatWindow({ onBack, language = 'en' }) {
       {/* Suggestion chips — full-width bg, centred content */}
       {(showYesNo || showScheme || showPerformer || showEye || showPaymentMode || showReturnMenu) && (
         <div style={{ background: '#fff', borderTop: '1px solid #F0F0F0' }}>
-          <div style={{ ...centered, display: 'flex', gap: '8px', padding: '10px 20px', flexWrap: 'wrap' }}>
-            {showYesNo && (
-              <>
-                <button onClick={() => handlePreProcAnswer(tr('yes'))} style={chipBtn}>{tr('yes')}</button>
-                <button onClick={() => handlePreProcAnswer(tr('no'))} style={chipBtn}>{tr('no')}</button>
-              </>
-            )}
-            {showScheme && (
-              <>
-                <button onClick={() => handlePreProcAnswer(tr('private'))} style={chipBtn}>{tr('private')}</button>
-                <button onClick={() => handlePreProcAnswer(tr('subsidised'))} style={chipBtn}>{tr('subsidised')}</button>
-              </>
-            )}
-            {showPerformer && (
-              <>
-                <button onClick={() => handlePreProcAnswer(tr('doctor'))} style={chipBtn}>{tr('doctor')}</button>
-                <button onClick={() => handlePreProcAnswer(tr('nurse'))} style={chipBtn}>{tr('nurse')}</button>
-              </>
-            )}
-            {showEye && (
-              <>
-                <button onClick={() => handlePreProcAnswer(tr('right'))} style={chipBtn}>{tr('right')}</button>
-                <button onClick={() => handlePreProcAnswer(tr('left'))} style={chipBtn}>{tr('left')}</button>
-              </>
-            )}
-            {showPaymentMode && (
-              <>
-                {paymentOptionsLocalized.map((payment) => (
-                  <button key={payment.value} onClick={() => handlePreProcAnswer(payment.label)} style={chipBtn}>{payment.label}</button>
-                ))}
-              </>
-            )}
+          <div style={{ ...centered, display: 'flex', gap: '8px', padding: '10px 20px', flexWrap: 'wrap', justifyContent: hasChoiceChips && showReturnMenu ? 'space-between' : 'flex-start' }}>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              {showYesNo && (
+                <>
+                  <button onClick={() => handlePreProcAnswer(tr('yes'))} style={chipBtn}>{tr('yes')}</button>
+                  <button onClick={() => handlePreProcAnswer(tr('no'))} style={chipBtn}>{tr('no')}</button>
+                </>
+              )}
+              {showScheme && (
+                <>
+                  <button onClick={() => handlePreProcAnswer(tr('private'))} style={chipBtn}>{tr('private')}</button>
+                  <button onClick={() => handlePreProcAnswer(tr('subsidised'))} style={chipBtn}>{tr('subsidised')}</button>
+                </>
+              )}
+              {showPerformer && (
+                <>
+                  <button onClick={() => handlePreProcAnswer(tr('doctor'))} style={chipBtn}>{tr('doctor')}</button>
+                  <button onClick={() => handlePreProcAnswer(tr('nurse'))} style={chipBtn}>{tr('nurse')}</button>
+                </>
+              )}
+              {showEye && (
+                <>
+                  <button onClick={() => handlePreProcAnswer(tr('right'))} style={chipBtn}>{tr('right')}</button>
+                  <button onClick={() => handlePreProcAnswer(tr('left'))} style={chipBtn}>{tr('left')}</button>
+                </>
+              )}
+              {showPaymentMode && (
+                <>
+                  {paymentOptionsLocalized.map((payment) => (
+                    <button key={payment.value} onClick={() => handlePreProcAnswer(payment.label)} style={chipBtn}>{payment.label}</button>
+                  ))}
+                </>
+              )}
+            </div>
             {showReturnMenu && (
               <button onClick={() => handleQuickReply('return_menu')} style={{ ...chipBtn, background: '#3B6EF8', color: '#fff' }}>
                 {tr('returnMenu')}
