@@ -928,7 +928,7 @@ export default function ChatWindow({ onBack, language = 'en' }) {
   const showPerformer = mode === 'pre_procedure' && preProcStep === 'q_performer'
   const showEye = mode === 'pre_procedure' && preProcStep === 'q_eye'
   const showPaymentMode = mode === 'pre_procedure' && preProcStep === 'payment_mode'
-  const showReturnMenu = mode === 'general_enquiry' || mode === 'appointment' || (mode === 'pre_procedure' && preProcStep === 'complete') || (mode === 'post_operation' && postOpStep === 'complete')
+  const showReturnMenu = mode === 'general_enquiry' || mode === 'appointment' || (mode === 'pre_procedure' && (preProcStep === 'complete' || preProcStep === 'ask_update' || preProcStep === 'q_stroke' || preProcStep === 'q_admission' || preProcStep === 'q_antibiotics' || preProcStep === 'q_pregnant' || preProcStep === 'q_financial_counselling' || preProcStep === 'q_scheme' || preProcStep === 'q_performer' || preProcStep === 'q_eye' || preProcStep === 'payment_mode' || preProcStep === 'cost_confirm')) || (mode === 'post_operation' && postOpStep === 'complete')
   const hasChoiceChips = showYesNo || showScheme || showPerformer || showEye || showPaymentMode
   const inputDisabled = !regStep && (
     (mode === 'pre_procedure' && (preProcStep === 'login' || preProcStep === 'complete'))
