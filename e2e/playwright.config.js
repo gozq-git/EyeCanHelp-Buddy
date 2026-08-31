@@ -36,11 +36,15 @@ export default defineConfig({
     { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
   ],
   // Start the Vite dev server automatically for the duration of the run.
+  // VITE_BYPASS_AUTH skips the Cognito login gate so specs stay fully offline.
   webServer: SKIP_WEBSERVER ? undefined : {
     command: 'npm run dev -- --host 127.0.0.1 --port 3000',
     cwd: FRONTEND_DIR,
     url: BASE_URL,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
+    env: {
+      VITE_BYPASS_AUTH: 'true',
+    },
   },
 })
