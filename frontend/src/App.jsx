@@ -1,8 +1,6 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect } from 'react'
 import { useAuth } from 'react-oidc-context'
-import SplashScreen from './components/SplashScreen'
-import OnboardingScreen from './components/OnboardingScreen'
-import ChatWindow from './components/ChatWindow'
+import AppShell from './AppShell'
 
 const fullScreenCenter = {
   height: '100vh',
@@ -17,8 +15,6 @@ const fullScreenCenter = {
 
 export default function App() {
   const auth = useAuth()
-  const [screen, setScreen] = useState('splash')
-  const [language, setLanguage] = useState('en')
 
   useEffect(() => {
     if (!auth.isLoading && !auth.error && !auth.isAuthenticated) {
@@ -38,28 +34,5 @@ export default function App() {
     return <div style={fullScreenCenter}>Redirecting to sign in…</div>
   }
 
-  return (
-    <div style={{
-      height: '100vh',
-      width: '100%',
-      display: 'flex',
-      flexDirection: 'column',
-      fontFamily: 'system-ui, -apple-system, sans-serif',
-      background: '#fff',
-    }}>
-      {screen === 'splash' && (
-        <SplashScreen onDone={() => setScreen('onboarding')} />
-      )}
-      {screen === 'onboarding' && (
-        <OnboardingScreen
-          language={language}
-          onLanguageChange={setLanguage}
-          onContinue={() => setScreen('chat')}
-        />
-      )}
-      {screen === 'chat' && (
-        <ChatWindow onBack={() => setScreen('onboarding')} language={language} />
-      )}
-    </div>
-  )
+  return <AppShell />
 }
