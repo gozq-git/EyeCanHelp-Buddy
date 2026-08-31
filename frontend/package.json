@@ -13,10 +13,12 @@
   },
   "dependencies": {
     "axios": "^1.7.2",
+    "oidc-client-ts": "^3.5.0",
     "react": "^18.3.1",
     "react-datepicker": "^9.1.0",
     "react-dom": "^18.3.1",
     "react-markdown": "^10.1.0",
+    "react-oidc-context": "^3.3.1",
     "remark-gfm": "^4.0.1"
   },
   "devDependencies": {
