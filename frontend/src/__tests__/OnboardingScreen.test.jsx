@@ -25,4 +25,23 @@ describe('OnboardingScreen', () => {
     const { container } = render(<OnboardingScreen onContinue={() => {}} />)
     expect(container.querySelector('svg')).toBeInTheDocument()
   })
+
+  it('reports the picked language and marks it pressed', async () => {
+    const onLanguageChange = vi.fn()
+    render(<OnboardingScreen language="en" onLanguageChange={onLanguageChange} onContinue={() => {}} />)
+
+    const chinese = screen.getByRole('button', { pressed: false, name: /中文/ })
+    await userEvent.click(chinese)
+
+    expect(onLanguageChange).toHaveBeenCalledWith('zh')
+    // The active language is exposed via aria-pressed for assistive tech.
+    expect(screen.getByRole('button', { pressed: true })).toBeInTheDocument()
+  })
+
+  it('does not throw when no language handler is supplied', async () => {
+    render(<OnboardingScreen language="en" onContinue={() => {}} />)
+
+    await userEvent.click(screen.getByRole('button', { pressed: false, name: /中文/ }))
+    expect(screen.getByRole('button', { pressed: true })).toBeInTheDocument()
+  })
 })

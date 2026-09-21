@@ -207,7 +207,14 @@ async def _stream_chat_events(
         yield _to_sse_event("error", error)
 
 
-@chat_router.post("", response_model=ChatResponse)
+@chat_router.post(
+    "",
+    response_model=ChatResponse,
+    responses={
+        400: {"description": "Message blocked by content guardrail"},
+        503: {"description": "Content guardrail unavailable"},
+    },
+)
 async def chatbot(
     request: ChatRequest,
     db: Annotated[AsyncSession, Depends(get_db)],
