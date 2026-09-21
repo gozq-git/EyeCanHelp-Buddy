@@ -29,32 +29,50 @@ def _latest_user_content(messages: list[dict]) -> str:
     return ""
 
 
+def _clean_text(value: object) -> str:
+    """The stripped value when it is a non-blank string, else ""."""
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    return ""
+
+
+def _text_from_content_part(part: object) -> str:
+    """Reply text from one `content` entry, whose "text" may be a str or {"text": str}."""
+    if not isinstance(part, dict):
+        return ""
+    part_text = part.get("text")
+    if isinstance(part_text, dict):
+        return _clean_text(part_text.get("text"))
+    return _clean_text(part_text)
+
+
+def _text_from_output_item(item: object) -> str:
+    """Reply text from one `outputs` entry: its own "text", else its "content" parts."""
+    if not isinstance(item, dict):
+        return ""
+    direct = _clean_text(item.get("text"))
+    if direct:
+        return direct
+    content = item.get("content")
+    if not isinstance(content, list):
+        return ""
+    for part in content:
+        nested = _text_from_content_part(part)
+        if nested:
+            return nested
+    return ""
+
+
 def _extract_guardrail_output_message(response: dict) -> str:
+    # Bedrock returns the intervention text under `outputs`; older/simpler payloads
+    # put it in a top-level `output` string. First non-blank match wins.
     outputs = response.get("outputs")
     if isinstance(outputs, list):
         for item in outputs:
-            if not isinstance(item, dict):
-                continue
-            text = item.get("text")
-            if isinstance(text, str) and text.strip():
-                return text.strip()
-            content = item.get("content")
-            if isinstance(content, list):
-                for part in content:
-                    if not isinstance(part, dict):
-                        continue
-                    part_text = part.get("text")
-                    if isinstance(part_text, dict):
-                        value = part_text.get("text")
-                        if isinstance(value, str) and value.strip():
-                            return value.strip()
-                    if isinstance(part_text, str) and part_text.strip():
-                        return part_text.strip()
-
-    top_level_output = response.get("output")
-    if isinstance(top_level_output, str) and top_level_output.strip():
-        return top_level_output.strip()
-    return ""
+            text = _text_from_output_item(item)
+            if text:
+                return text
+    return _clean_text(response.get("output"))
 
 
 async def apply_guardrail_to_messages(messages: list[dict]) -> dict[str, str | bool]:

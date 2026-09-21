@@ -182,3 +182,39 @@ describe('MessageBubble — postop_doc type', () => {
   })
 })
 
+describe('MessageBubble — markdown rendering', () => {
+  // Bot replies stream through ReactMarkdown with a custom renderer per element.
+  // Each renderer only runs when the element appears, so one document exercises them.
+  it('renders headings, lists, quotes, tables and rules from bot markdown', () => {
+    const markdown = [
+      '### Heading three',
+      '',
+      '- first item',
+      '- second item',
+      '',
+      '> quoted advice',
+      '',
+      '| Item | Cost |',
+      '| --- | --- |',
+      '| Injection | $430 |',
+      '',
+      '---',
+    ].join('\n')
+
+    render(<MessageBubble role="bot" type="text" content={markdown} />)
+
+    expect(screen.getByRole('heading', { level: 3, name: 'Heading three' })).toBeInTheDocument()
+    expect(screen.getAllByRole('listitem')).toHaveLength(2)
+    expect(screen.getByText('quoted advice')).toBeInTheDocument()
+    expect(screen.getByRole('table')).toBeInTheDocument()
+    expect(screen.getByRole('columnheader', { name: 'Item' })).toBeInTheDocument()
+    expect(screen.getByRole('cell', { name: 'Injection' })).toBeInTheDocument()
+    expect(screen.getByRole('separator')).toBeInTheDocument()
+  })
+
+  it('renders an empty bubble when content is missing', () => {
+    render(<MessageBubble role="bot" type="text" content={undefined} />)
+    expect(screen.getByTestId('bot-message')).toBeInTheDocument()
+  })
+})
+

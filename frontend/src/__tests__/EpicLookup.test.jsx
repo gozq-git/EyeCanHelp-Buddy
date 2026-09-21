@@ -71,4 +71,15 @@ describe('EpicLookup', () => {
       expect(screen.getByText('Patient not found or EPIC service unavailable.')).toBeInTheDocument()
     })
   })
+
+  it('does not call the API when submitted with an empty id', async () => {
+    render(<EpicLookup />)
+
+    // The submit button is only disabled while loading, so an empty submit is
+    // possible and must be rejected before any request goes out.
+    await userEvent.click(screen.getByRole('button', { name: /look ?up/i }))
+
+    expect(mocks.getEpicPatient).not.toHaveBeenCalled()
+    expect(mocks.getEpicRecord).not.toHaveBeenCalled()
+  })
 })

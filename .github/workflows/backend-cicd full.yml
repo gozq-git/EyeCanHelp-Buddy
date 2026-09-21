@@ -167,16 +167,29 @@ jobs:
         run: pip install -r backend/requirements.txt
       - name: Install Snyk CLI
         run: npm install -g snyk
+      # Both steps write a JSON report as well as stdout, and both keep
+      # continue-on-error so a finding does not fail the pipeline. Without the
+      # artifact upload below the results were only visible in the run log.
       - name: Run Snyk (SCA)
         continue-on-error: true
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        run: snyk test --file=backend/requirements.txt --package-manager=pip
+        run: |
+          mkdir -p reports/snyk
+          snyk test --file=backend/requirements.txt --package-manager=pip \
+            --json-file-output=reports/snyk/snyk-sca.json
       - name: Run Snyk Code (SAST)
         continue-on-error: true
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        run: snyk code test
+        run: |
+          mkdir -p reports/snyk
+          snyk code test --json-file-output=reports/snyk/snyk-sast.json
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: snyk-report
+          path: reports/snyk
 
   build-backend-image:
     name: Build backend Docker image

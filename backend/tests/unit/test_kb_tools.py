@@ -219,7 +219,9 @@ def test_format_kb_response_lists_up_to_three_snippets():
 
     out = kb_tools.format_kb_response(results)
 
-    assert "- fact 0" in out and "- fact 1" in out and "- fact 2" in out
+    assert "- fact 0" in out
+    assert "- fact 1" in out
+    assert "- fact 2" in out
     assert "fact 3" not in out
     assert "consult a licensed clinician" in out
 

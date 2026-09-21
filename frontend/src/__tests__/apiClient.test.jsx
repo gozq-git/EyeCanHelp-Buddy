@@ -15,6 +15,7 @@ vi.mock('axios', () => ({
 }))
 
 import {
+  calculateBill,
   enqueueAppointmentNotification,
   createPatient,
   getEpicPatient,
@@ -198,5 +199,197 @@ describe('api client', () => {
     } finally {
       global.fetch = originalFetch
     }
+  })
+
+  it('maps calculateBill arguments onto the snake_case billing payload', () => {
+    calculateBill({ recordClass: 'PTE', performer: 'Doctor', injections: 2 })
+
+    expect(mocks.mockPost).toHaveBeenCalledWith('/billing/calculate', {
+      record_class: 'PTE',
+      performer: 'Doctor',
+      injections: 2,
+    })
+  })
+})
+
+// ─── Streaming edge cases ─────────────────────────────────────────────────────
+
+// sendChatMessageStream hand-rolls SSE framing and error extraction, so each
+// branch is driven directly here rather than through the chat UI.
+
+describe('sendChatMessageStream — framing and error handling', () => {
+  const send = () => sendChatMessageStream([{ role: 'user', content: 'hi' }])
+
+  // Feeds the given raw SSE strings as successive reader chunks, then ends.
+  const readerFrom = (frames) => {
+    const encoder = new TextEncoder()
+    const read = vi.fn()
+    frames.forEach((f) => read.mockResolvedValueOnce({ done: false, value: encoder.encode(f) }))
+    read.mockResolvedValue({ done: true, value: undefined })
+    return { read }
+  }
+
+  const okStream = (frames) => vi.fn().mockResolvedValue({
+    ok: true,
+    status: 200,
+    headers: { get: () => 'text/event-stream' },
+    body: { getReader: () => readerFrom(frames) },
+  })
+
+  const withFetch = async (impl, fn) => {
+    const originalFetch = global.fetch
+    global.fetch = impl
+    try {
+      return await fn()
+    } finally {
+      global.fetch = originalFetch
+    }
+  }
+
+  it('picks the earliest boundary when a chunk mixes LF and CRLF frames', async () => {
+    // One chunk holding an LF-terminated frame followed by a CRLF-terminated one.
+    const fetchMock = okStream(['data: a\n\ndata: b\r\n\r\nevent: done\ndata: [DONE]\n\n'])
+
+    await withFetch(fetchMock, async () => {
+      await expect(send()).resolves.toBe('ab')
+    })
+  })
+
+  it('returns the accumulated text when the stream ends without a done event', async () => {
+    const fetchMock = okStream(['data: partial\n\n'])
+
+    await withFetch(fetchMock, async () => {
+      await expect(send()).resolves.toBe('partial')
+    })
+  })
+
+  it('throws the payload of an error event', async () => {
+    const fetchMock = okStream(['event: error\ndata: coordinator unavailable\n\n'])
+
+    await withFetch(fetchMock, async () => {
+      await expect(send()).rejects.toThrow('coordinator unavailable')
+    })
+  })
+
+  it('throws a default message for an error event with no payload', async () => {
+    const fetchMock = okStream(['event: error\ndata: \n\n'])
+
+    await withFetch(fetchMock, async () => {
+      await expect(send()).rejects.toThrow('Streaming request failed')
+    })
+  })
+
+  it('rejects an unexpected content-type', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: { get: () => 'application/json' },
+      body: { getReader: () => readerFrom([]) },
+    })
+
+    await withFetch(fetchMock, async () => {
+      await expect(send()).rejects.toThrow(/Unexpected streaming content-type: application\/json/)
+    })
+  })
+
+  it('rejects a missing content-type as unknown', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: { get: () => null },
+      body: { getReader: () => readerFrom([]) },
+    })
+
+    await withFetch(fetchMock, async () => {
+      await expect(send()).rejects.toThrow(/Unexpected streaming content-type: unknown/)
+    })
+  })
+
+  it('rejects when the response has no body', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: { get: () => 'text/event-stream' },
+      body: null,
+    })
+
+    await withFetch(fetchMock, async () => {
+      await expect(send()).rejects.toThrow('Streaming response body is unavailable')
+    })
+  })
+
+  // ── error-payload extraction, in the priority order buildErrorMessageFromPayload uses
+  const jsonError = (payload) => vi.fn().mockResolvedValue({
+    ok: false,
+    status: 503,
+    headers: { get: () => 'application/json' },
+    json: async () => payload,
+  })
+
+  it('uses a JSON "message" field when detail is absent', async () => {
+    await withFetch(jsonError({ message: 'guardrail offline' }), async () => {
+      await expect(send()).rejects.toMatchObject({ message: 'guardrail offline', status: 503 })
+    })
+  })
+
+  it('uses a JSON "error" field when detail and message are absent', async () => {
+    await withFetch(jsonError({ error: 'upstream refused' }), async () => {
+      await expect(send()).rejects.toThrow('upstream refused')
+    })
+  })
+
+  it('uses a bare JSON string payload', async () => {
+    await withFetch(jsonError('  plain string failure  '), async () => {
+      await expect(send()).rejects.toThrow('plain string failure')
+    })
+  })
+
+  it('falls back to the status line when the JSON payload is unusable', async () => {
+    // Empty object and null both yield no message, so the status line is used.
+    await withFetch(jsonError({}), async () => {
+      await expect(send()).rejects.toThrow('Streaming request failed: 503')
+    })
+    await withFetch(jsonError(null), async () => {
+      await expect(send()).rejects.toThrow('Streaming request failed: 503')
+    })
+  })
+
+  it('parses a JSON error body served with a non-JSON content-type', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 500,
+      headers: { get: () => 'text/plain' },
+      text: async () => '{"detail":"masked upstream error"}',
+    })
+
+    await withFetch(fetchMock, async () => {
+      await expect(send()).rejects.toThrow('masked upstream error')
+    })
+  })
+
+  it('uses raw text when a non-JSON error body will not parse', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 502,
+      headers: { get: () => 'text/plain' },
+      text: async () => '  Bad Gateway  ',
+    })
+
+    await withFetch(fetchMock, async () => {
+      await expect(send()).rejects.toMatchObject({ message: 'Bad Gateway', status: 502 })
+    })
+  })
+
+  it('falls back to the status line when the error body cannot be read', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 500,
+      headers: { get: () => 'application/json' },
+      json: async () => { throw new Error('socket closed') },
+    })
+
+    await withFetch(fetchMock, async () => {
+      await expect(send()).rejects.toThrow('Streaming request failed: 500')
+    })
   })
 })

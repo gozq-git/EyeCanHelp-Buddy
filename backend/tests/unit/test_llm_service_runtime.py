@@ -85,6 +85,46 @@ def test_extract_guardrail_output_message_from_nested_content():
     assert llm_service._extract_guardrail_output_message(response) == "Nested blocked message."
 
 
+def test_extract_guardrail_output_message_skips_non_dict_outputs():
+    response = {"outputs": ["not a dict", 7, {"text": "Real message."}]}
+
+    assert llm_service._extract_guardrail_output_message(response) == "Real message."
+
+
+def test_extract_guardrail_output_message_skips_blank_nested_text():
+    # A {"text": {...}} part whose inner value is blank must fall through to the
+    # next part rather than ending the scan.
+    response = {
+        "outputs": [
+            {
+                "content": [
+                    "not a dict",
+                    {"text": {"text": "   "}},
+                    {"text": "Second part wins."},
+                ]
+            }
+        ]
+    }
+
+    assert llm_service._extract_guardrail_output_message(response) == "Second part wins."
+
+
+def test_extract_guardrail_output_message_falls_back_to_top_level_output():
+    assert llm_service._extract_guardrail_output_message(
+        {"outputs": [], "output": "Top level message."}
+    ) == "Top level message."
+    # `outputs` present but not a list — still falls back.
+    assert llm_service._extract_guardrail_output_message(
+        {"outputs": "nope", "output": "Top level message."}
+    ) == "Top level message."
+
+
+def test_extract_guardrail_output_message_returns_empty_when_nothing_usable():
+    assert llm_service._extract_guardrail_output_message({}) == ""
+    assert llm_service._extract_guardrail_output_message({"outputs": [{}]}) == ""
+    assert llm_service._extract_guardrail_output_message({"output": "   "}) == ""
+
+
 @pytest.mark.asyncio
 async def test_invoke_with_runtime_arn_returns_empty_when_not_configured(monkeypatch):
     monkeypatch.delenv("AGENTCORE_COORDINATOR_RUNTIME_ARN", raising=False)

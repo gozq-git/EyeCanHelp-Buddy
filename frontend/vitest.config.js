@@ -11,7 +11,9 @@ export default defineConfig({
       provider: 'v8',
       // Written to the shared artifact folder so the reports container can serve it.
       reportsDirectory: '../reports/frontend/coverage',
-      reporter: ['text', 'html'],
+      // lcov is what SonarCloud reads (sonar.javascript.lcov.reportPaths); text is
+      // for the console and html for the reports container.
+      reporter: ['text', 'html', 'lcov'],
       include: ['src/**/*.{js,jsx}'],
       exclude: ['src/main.jsx', 'src/__tests__/**'],
     },
