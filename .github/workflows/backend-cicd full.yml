@@ -2,13 +2,22 @@ name: Backend Full CI/CD Pipeline
 
 on:
   workflow_dispatch:
-  # push:
-  #   branches:
-  #     - main
-  #   paths:
-  #     - backend/**
-  #     - '!backend/agents/**'
-  #     - .github/workflows/backend-cicd full.yml
+  # Analyse every PR, so the quality gate blocks before a merge rather than after.
+  pull_request:
+    branches:
+      - main
+  # Also analyse main itself. SonarCloud's dashboard and its API default to the
+  # main branch, so without this the baseline silently goes stale: PR analyses land
+  # under their own pull-request id and main keeps reporting its last push-time
+  # result. Paths include frontend/** because sonar.sources now covers it too.
+  push:
+    branches:
+      - main
+    paths:
+      - backend/**
+      - frontend/**
+      - sonar-project.properties
+      - .github/workflows/backend-cicd full.yml
 
 permissions:
   contents: read
@@ -78,6 +87,35 @@ jobs:
             -Dsonar.python.coverage.reportPaths=backend/coverage.xml
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      - name: Wait for SonarCloud to finish processing
+        shell: bash
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST: https://sonarcloud.io
+        run: |
+          # The scanner writes the Compute Engine task id here. Polling it is exact;
+          # the fixed `sleep 30` this replaces raced SonarCloud's async processing,
+          # so the export below could capture the *previous* analysis.
+          task_file=$(find . -name report-task.txt -path '*scannerwork*' | head -1)
+          if [ -z "$task_file" ]; then
+            echo "No report-task.txt found — the scanner did not publish a report."
+            exit 1
+          fi
+          ce_task_id=$(grep '^ceTaskId=' "$task_file" | cut -d= -f2)
+          echo "Waiting on analysis task $ce_task_id"
+          for _ in $(seq 1 60); do
+            status=$(curl -s -u "$SONAR_TOKEN:" \
+              "$SONAR_HOST/api/ce/task?id=$ce_task_id" \
+              | grep -o '"status":"[A-Z]*"' | head -1 | cut -d'"' -f4)
+            echo "  status: ${status:-unknown}"
+            case "$status" in
+              SUCCESS) exit 0 ;;
+              FAILED|CANCELED) echo "Analysis $status"; exit 1 ;;
+            esac
+            sleep 5
+          done
+          echo "Timed out after 5 minutes waiting for analysis."
+          exit 1
       - name: Export Sonar results to files
         if: always()
         shell: bash
@@ -85,20 +123,24 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST: https://sonarcloud.io
           SONAR_PROJECT: gozq-git_EyeCanHelp-Buddy
+          # Results are stored per branch, or per pull request for PR analyses.
+          # Without this selector the queries silently fell back to the main branch,
+          # so the exported report showed main's last analysis no matter which
+          # branch had just been scanned.
+          SONAR_SCOPE: ${{ github.event_name == 'pull_request' && format('pullRequest={0}', github.event.pull_request.number) || format('branch={0}', github.ref_name) }}
         run: |
-          # SonarCloud processes the report asynchronously; give it a moment.
-          sleep 30
+          echo "Reporting scope: $SONAR_SCOPE"
           echo "Fetching open issues..."
           curl -s -u "$SONAR_TOKEN:" \
-            "$SONAR_HOST/api/issues/search?componentKeys=$SONAR_PROJECT&resolved=false&ps=500" \
+            "$SONAR_HOST/api/issues/search?componentKeys=$SONAR_PROJECT&resolved=false&ps=500&$SONAR_SCOPE" \
             -o sonar-issues.json
           echo "Fetching security hotspots..."
           curl -s -u "$SONAR_TOKEN:" \
-            "$SONAR_HOST/api/hotspots/search?projectKey=$SONAR_PROJECT&ps=500" \
+            "$SONAR_HOST/api/hotspots/search?projectKey=$SONAR_PROJECT&ps=500&$SONAR_SCOPE" \
             -o sonar-hotspots.json
           echo "Fetching quality gate status..."
           curl -s -u "$SONAR_TOKEN:" \
-            "$SONAR_HOST/api/qualitygates/project_status?projectKey=$SONAR_PROJECT" \
+            "$SONAR_HOST/api/qualitygates/project_status?projectKey=$SONAR_PROJECT&$SONAR_SCOPE" \
             -o sonar-quality-gate.json
           echo "=== Summary ==="
           echo "Issues:   $(grep -o '"total":[0-9]*' sonar-issues.json | head -1)"
