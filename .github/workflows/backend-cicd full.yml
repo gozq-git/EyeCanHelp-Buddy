@@ -56,9 +56,51 @@ jobs:
           name: backend-report
           path: reports/backend
 
+  frontend-tests:
+    name: Unit test (vitest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+      - name: Run vitest with coverage
+        working-directory: frontend
+        run: npm run test:coverage
+      # vitest writes `SF:src/...` because its root is frontend/, but the scanner
+      # resolves lcov paths from the repo root, where that is nothing. Without this
+      # rewrite every frontend file reports 0% coverage even though the report is
+      # present. Anchored to line start and guarded so a re-run stays idempotent.
+      - name: Make lcov paths repo-root relative
+        shell: bash
+        run: |
+          lcov=reports/frontend/coverage/lcov.info
+          if [ ! -f "$lcov" ]; then
+            echo "Expected coverage report at $lcov, but it was not produced."
+            exit 1
+          fi
+          sed -i 's|^SF:src/|SF:frontend/src/|' "$lcov"
+          if ! grep -q '^SF:frontend/src/' "$lcov"; then
+            echo "No SF: entries resolve under frontend/src — refusing to publish a report Sonar will read as 0%."
+            grep -m5 '^SF:' "$lcov" || true
+            exit 1
+          fi
+          echo "Rewrote $(grep -c '^SF:frontend/src/' "$lcov") source paths."
+      - name: Upload vitest coverage for SonarQube
+        uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: frontend-coverage
+          path: reports/frontend/coverage/lcov.info
+
   sonarqube-scan:
     name: SonarQube Scan (Code Quality)
-    needs: backend-tests
+    needs: [backend-tests, frontend-tests]
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
@@ -80,6 +122,11 @@ jobs:
         with:
           name: backend-coverage
           path: backend
+      - name: Download vitest coverage artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: frontend-coverage
+          path: reports/frontend/coverage
       - name: SonarQube Scan
         uses: sonarsource/sonarqube-scan-action@v7
         with:
