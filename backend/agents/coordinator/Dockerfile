@@ -8,16 +8,22 @@ WORKDIR /app
 # The base image ships pip 25.0.1, which Trivy flags for 6 CVEs (malicious-index
 # and malicious-wheel handling). Pinned rather than a bare --upgrade so the build
 # stays reproducible; bump this when Trivy flags the pinned version.
-RUN pip install --no-cache-dir --upgrade "pip==26.2.1"
+# --only-binary is needed here too, not just on the install below: pip is itself a
+# package, so without it this line can run a setup script (Sonar docker:S8541).
+RUN pip install --no-cache-dir --only-binary=:all: --upgrade "pip==26.2.1"
 
-# requirements.lock pins every transitive version, so the image is reproducible
-# instead of re-resolving on each build (Sonar docker:S8544). requirements.txt is
-# kept alongside it as the human-edited intent; see the lock file header for how to
+# requirements.lock pins every transitive version *and* its wheel hash, so the image
+# is reproducible instead of re-resolving on each build. requirements.txt is kept
+# alongside it as the human-edited intent; see the lock file header for how to
 # regenerate after changing it.
 COPY agents/coordinator/requirements.txt ./requirements.txt
 COPY agents/coordinator/requirements.lock ./requirements.lock
-# Wheels only, so no dependency can run arbitrary code at install time (Sonar docker:S8541)
-RUN pip install --no-cache-dir --only-binary=:all: -r ./requirements.lock
+# --only-binary: wheels only, so no dependency can run arbitrary code at install
+# time (Sonar docker:S8541). --require-hashes: every artifact must match a hash in
+# the lock, so a compromised index cannot swap in a different build of a version we
+# already pinned (Sonar docker:S8544) — exact pins alone do not cover that, and the
+# flag also makes pip reject the install outright if the lock is ever incomplete.
+RUN pip install --no-cache-dir --only-binary=:all: --require-hashes -r ./requirements.lock
 
 # Copy only the coordinator sources instead of the whole build context, so
 # tests/tooling cannot leak into the image (Sonar docker:S6470)
