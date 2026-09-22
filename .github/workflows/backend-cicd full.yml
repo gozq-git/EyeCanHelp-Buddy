@@ -130,8 +130,13 @@ jobs:
       - name: SonarQube Scan
         uses: sonarsource/sonarqube-scan-action@v7
         with:
+          # sonar.verbose is temporary. The engine is currently dying while Spring
+          # builds its context — the chain ends at ArchitectureAnalysisContextAdapter
+          # -> Analysis, and the default log truncates the cause. Verbose prints the
+          # full `Caused by:` chain. Remove it once the root cause is known.
           args: >
             -Dsonar.python.coverage.reportPaths=backend/coverage.xml
+            -Dsonar.verbose=true
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
       - name: Wait for SonarCloud to finish processing
