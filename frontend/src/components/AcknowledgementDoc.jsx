@@ -109,6 +109,16 @@ const FORM_COPY = {
   },
 }
 
+// Keyed by language like QUESTIONS and FORM_COPY above, rather than the chained
+// ternaries this replaces (Sonar javascript:S3358). Unknown languages fall back to
+// `en`, which is what the old `: 'Yes'` tail did.
+const YES_NO_LABELS = {
+  en: { yes: 'Yes', no: 'No' },
+  zh: { yes: '是', no: '否' },
+  ms: { yes: 'Ya', no: 'Tidak' },
+  ta: { yes: 'ஆம்', no: 'இல்லை' },
+}
+
 const INK = '#1a1a1a'
 const BORDER = '1px solid #222'
 const TTSH_LOGO_SRC = '/ttsh_logo.png'
@@ -162,10 +172,7 @@ export default function AcknowledgementDoc({ formData = {}, language = 'en' }) {
 
   const questionSet = QUESTIONS[language] || QUESTIONS.en
   const copy = FORM_COPY[language] || FORM_COPY.en
-  const labels = {
-    yes: language === 'zh' ? '是' : language === 'ms' ? 'Ya' : language === 'ta' ? 'ஆம்' : 'Yes',
-    no: language === 'zh' ? '否' : language === 'ms' ? 'Tidak' : language === 'ta' ? 'இல்லை' : 'No',
-  }
+  const labels = YES_NO_LABELS[language] || YES_NO_LABELS.en
 
   return (
     <div style={{

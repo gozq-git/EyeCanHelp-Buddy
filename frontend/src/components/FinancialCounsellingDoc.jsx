@@ -248,7 +248,38 @@ const DIAGNOSES = [
   { label: 'DRP E34.58', code: null },
 ]
 
-function CB({ checked, label }) {
+// Which of the four "counselling in" boxes is ticked. A lookup rather than the
+// chained ternary it replaces (Sonar javascript:S3358); the order matches the
+// [mandarin, english, malay, tamil] row below, and an unknown language falls back
+// to English's index, as the old ternary tail did.
+const COUNSELLING_LANG_INDEX = { zh: 0, en: 1, ms: 2, ta: 3 }
+
+// Rendered cost: a "min-max" range becomes "$min - $max", a bare figure gets a "$"
+// if it lacks one, and an empty figure shows the not-available copy. An if-chain
+// rather than nested ternaries (Sonar javascript:S3358).
+function formatCost(rawCost, notAvailable) {
+  if (rawCost.includes('-')) {
+    const [minPart, maxPart] = rawCost.split('-').map(v => v.trim().replace(/^\$/, ''))
+    return `$${minPart} - $${maxPart}`
+  }
+  if (!rawCost) return notAvailable
+  return rawCost.startsWith('$') ? rawCost : `$${rawCost}`
+}
+
+// The two combined schemes match on substrings because the stored value varies
+// ("MediShield" vs "Medishield Life"); everything else is an exact match. "nok" is
+// excluded from Medisave (Self) so NOK Medisave does not tick both boxes.
+function isPaymentChecked(value, mode, paymentMode) {
+  if (value === 'Medishield Life / Integrated Plan') {
+    return mode.includes('medishield') || mode.includes('integrated') || paymentMode === 'MediShield'
+  }
+  if (value === 'Medisave (Self)') {
+    return (mode.includes('medisave') && !mode.includes('nok')) || paymentMode === 'Medisave'
+  }
+  return value.toLowerCase() === mode
+}
+
+function Checkbox({ checked, label }) {
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', pointerEvents: 'none', userSelect: 'none' }}>
       <input type="checkbox" checked={!!checked} readOnly style={{ margin: 0, width: '10px', height: '10px', pointerEvents: 'none' }} />
@@ -305,12 +336,7 @@ export default function FinancialCounsellingDoc({ formData = {}, language = 'en'
   ]
   const activeMed = MED_OPTIONS.find(m => medication.toLowerCase().includes(m.value.toLowerCase()))?.value || 'Others'
   const rawCost = String(estCost ?? '').trim()
-  const rangeText = rawCost.includes('-')
-    ? (() => {
-        const [minPart, maxPart] = rawCost.split('-').map(v => v.trim().replace(/^\$/, ''))
-        return `$${minPart} - $${maxPart}`
-      })()
-    : (rawCost ? (rawCost.startsWith('$') ? rawCost : `$${rawCost}`) : copy.notAvailable)
+  const rangeText = formatCost(rawCost, copy.notAvailable)
 
   const statement = copy.counsellingStatement
     .replace('{cost}', rangeText)
@@ -346,14 +372,14 @@ export default function FinancialCounsellingDoc({ formData = {}, language = 'en'
 
       <FlexRow>
         <strong>{copy.site}</strong>
-        <CB checked={isLeft} label={copy.left} />
-        <CB checked={isRight} label={copy.right} />
-        <CB checked={isBoth} label={copy.both} />
+        <Checkbox checked={isLeft} label={copy.left} />
+        <Checkbox checked={isRight} label={copy.right} />
+        <Checkbox checked={isBoth} label={copy.both} />
       </FlexRow>
 
       <FlexRow>
         <strong>{copy.class}</strong>
-        {['PTE', 'SUB'].map(c => <CB key={c} checked={classCode === c} label={c} />)}
+        {['PTE', 'SUB'].map(c => <Checkbox key={c} checked={classCode === c} label={c} />)}
       </FlexRow>
 
       <Line />
@@ -361,7 +387,7 @@ export default function FinancialCounsellingDoc({ formData = {}, language = 'en'
       <div style={{ fontWeight: 700, fontSize: '10px', marginBottom: '4px' }}>{copy.diagnosis}</div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '3px', marginBottom: '6px' }}>
         {DIAGNOSES.map(d => (
-          <CB key={d.label} checked={d.code === diagnosis} label={copy.diagnosisLabels[d.label] || d.label} />
+          <Checkbox key={d.label} checked={d.code === diagnosis} label={copy.diagnosisLabels[d.label] || d.label} />
         ))}
       </div>
 
@@ -369,15 +395,15 @@ export default function FinancialCounsellingDoc({ formData = {}, language = 'en'
 
       <div style={{ fontWeight: 700, marginBottom: '4px' }}>{copy.procedure}</div>
       <div style={{ marginBottom: '2px' }}>
-        <CB checked={isNurseLed || !isDoctorLed} label={copy.nurseLed} />
+        <Checkbox checked={isNurseLed || !isDoctorLed} label={copy.nurseLed} />
       </div>
       <div style={{ marginBottom: '6px' }}>
-        <CB checked={isDoctorLed} label={copy.doctorLed} />
+        <Checkbox checked={isDoctorLed} label={copy.doctorLed} />
       </div>
 
       <div style={{ fontWeight: 700, marginBottom: '3px' }}>{copy.drug}</div>
       <FlexRow>
-        {MED_OPTIONS.map((m) => <CB key={m.value} checked={m.value === activeMed} label={m.label} />)}
+        {MED_OPTIONS.map((m) => <Checkbox key={m.value} checked={m.value === activeMed} label={m.label} />)}
       </FlexRow>
 
       <div style={{ background: '#fff8f8', border: '1px solid #fdd', borderRadius: '4px', padding: '6px', marginBottom: '8px' }}>
@@ -401,9 +427,9 @@ export default function FinancialCounsellingDoc({ formData = {}, language = 'en'
       <FlexRow>
         <strong>{copy.counsellingIn}</strong>
         {[copy.mandarin, copy.english, copy.malay, copy.tamil].map((lang, index) => (
-          <CB
+          <Checkbox
             key={lang}
-            checked={index === (language === 'zh' ? 0 : language === 'ms' ? 2 : language === 'ta' ? 3 : 1)}
+            checked={index === (COUNSELLING_LANG_INDEX[language] ?? COUNSELLING_LANG_INDEX.en)}
             label={lang}
           />
         ))}
@@ -413,12 +439,8 @@ export default function FinancialCounsellingDoc({ formData = {}, language = 'en'
         <strong>{copy.payment}</strong>
         {PAYMENT_OPTIONS.map(({ value, label }) => {
           const mode = paymentMode.toLowerCase()
-          const checked = value === 'Medishield Life / Integrated Plan'
-            ? mode.includes('medishield') || mode.includes('integrated') || paymentMode === 'MediShield'
-            : value === 'Medisave (Self)'
-              ? (mode.includes('medisave') && !mode.includes('nok')) || paymentMode === 'Medisave'
-              : value.toLowerCase() === mode
-          return <CB key={value} checked={checked} label={label[language] || label.en} />
+          const checked = isPaymentChecked(value, mode, paymentMode)
+          return <Checkbox key={value} checked={checked} label={label[language] || label.en} />
         })}
       </FlexRow>
 

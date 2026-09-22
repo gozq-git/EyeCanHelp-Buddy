@@ -83,12 +83,12 @@ export default function AcknowledgementForm() {
       const payload = {
         patient_record: {
           ...rec,
-          record_number_of_injections: parseInt(rec.record_number_of_injections, 10) || 1,
+          record_number_of_injections: Number.parseInt(rec.record_number_of_injections, 10) || 1,
         },
         payment: {
           ...pay,
-          payment_maxMedisave: parseFloat(pay.payment_maxMedisave) || 0,
-          payment_estCostPerInjection: parseFloat(pay.payment_estCostPerInjection) || 0,
+          payment_maxMedisave: Number.parseFloat(pay.payment_maxMedisave) || 0,
+          payment_estCostPerInjection: Number.parseFloat(pay.payment_estCostPerInjection) || 0,
         },
       }
       const res = await submitAcknowledgement(payload)
@@ -123,8 +123,8 @@ export default function AcknowledgementForm() {
             <TextInput label="Patient Name" value={rec.record_name} onChange={setRecField('record_name')} placeholder="Full name" />
             <TextInput label="Diagnosis (ICD-10)" value={rec.record_diagnosis} onChange={setRecField('record_diagnosis')} placeholder="e.g. H35.31" />
             <div style={FIELD_STYLE}>
-              <label style={LABEL_STYLE}>Target Eye</label>
-              <select value={rec.record_eyes} onChange={setRecField('record_eyes')} style={SELECT_STYLE}>
+              <label htmlFor="record_eyes" style={LABEL_STYLE}>Target Eye</label>
+              <select id="record_eyes" value={rec.record_eyes} onChange={setRecField('record_eyes')} style={SELECT_STYLE}>
                 <option value="OD">Right Eye (OD)</option>
                 <option value="OS">Left Eye (OS)</option>
                 <option value="OU">Both Eyes (OU)</option>
@@ -151,8 +151,8 @@ export default function AcknowledgementForm() {
             <TextInput label="Patient Name" value={pay.payment_name} onChange={setPayField('payment_name')} placeholder="Full name" />
             <TextInput label="Diagnosis (ICD-10)" value={pay.payment_diagnosis} onChange={setPayField('payment_diagnosis')} placeholder="e.g. H35.31" />
             <div style={FIELD_STYLE}>
-              <label style={LABEL_STYLE}>Payment Mode</label>
-              <select value={pay.payment_mode} onChange={setPayField('payment_mode')} style={SELECT_STYLE}>
+              <label htmlFor="payment_mode" style={LABEL_STYLE}>Payment Mode</label>
+              <select id="payment_mode" value={pay.payment_mode} onChange={setPayField('payment_mode')} style={SELECT_STYLE}>
                 <option value="Medisave">Medisave</option>
                 <option value="Cash">Cash</option>
                 <option value="MediShield">MediShield</option>

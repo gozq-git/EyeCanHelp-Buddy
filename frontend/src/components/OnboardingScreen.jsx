@@ -74,46 +74,51 @@ export default function OnboardingScreen({ onContinue, language = 'en', onLangua
       </div>
 
       <div style={{ width: '100%', maxWidth: '560px', padding: '24px' }}>
-        <label style={{ display: 'block', fontSize: '14px', color: '#555', marginBottom: '8px', fontWeight: 600 }}>
-          Preferred language
-        </label>
-        <div
-          role="group"
-          aria-label="Preferred language"
-          style={{
-            display: 'flex',
-            gap: '8px',
-            marginBottom: '12px',
-            flexWrap: 'wrap',
-          }}
-        >
-          {LANGUAGES.map((lang) => {
-            const isActive = language === lang.value
+        {/* fieldset/legend rather than a <label> plus a role="group" div: the label
+            named a group of buttons, not a single control, so it had nothing to point
+            at (Sonar javascript:S6853), and a native grouping element is preferred
+            over the ARIA role (javascript:S6819). The fieldset's own border/padding
+            are reset so the layout is unchanged. */}
+        <fieldset style={{ border: 'none', margin: 0, padding: 0, minWidth: 0 }}>
+          <legend style={{ padding: 0, fontSize: '14px', color: '#555', marginBottom: '8px', fontWeight: 600 }}>
+            Preferred language
+          </legend>
+          <div
+            style={{
+              display: 'flex',
+              gap: '8px',
+              marginBottom: '12px',
+              flexWrap: 'wrap',
+            }}
+          >
+            {LANGUAGES.map((lang) => {
+              const isActive = language === lang.value
 
-            return (
-              <button
-                key={lang.value}
-                type="button"
-                onClick={() => onLanguageChange?.(lang.value)}
-                aria-pressed={isActive}
-                style={{
-                  flex: '1 1 120px',
-                  minWidth: 0,
-                  padding: '10px 12px',
-                  borderRadius: '12px',
-                  border: isActive ? '1px solid #3B6EF8' : '1px solid #D8D8D8',
-                  background: isActive ? '#EEF3FF' : '#fff',
-                  color: isActive ? '#2E5FE6' : '#333',
-                  fontSize: '14px',
-                  fontWeight: isActive ? 700 : 500,
-                  cursor: 'pointer',
-                }}
-              >
-                {lang.label}
-              </button>
-            )
-          })}
-        </div>
+              return (
+                <button
+                  key={lang.value}
+                  type="button"
+                  onClick={() => onLanguageChange?.(lang.value)}
+                  aria-pressed={isActive}
+                  style={{
+                    flex: '1 1 120px',
+                    minWidth: 0,
+                    padding: '10px 12px',
+                    borderRadius: '12px',
+                    border: isActive ? '1px solid #3B6EF8' : '1px solid #D8D8D8',
+                    background: isActive ? '#EEF3FF' : '#fff',
+                    color: isActive ? '#2E5FE6' : '#333',
+                    fontSize: '14px',
+                    fontWeight: isActive ? 700 : 500,
+                    cursor: 'pointer',
+                  }}
+                >
+                  {lang.label}
+                </button>
+              )
+            })}
+          </div>
+        </fieldset>
         <button
           onClick={onContinue}
           style={{

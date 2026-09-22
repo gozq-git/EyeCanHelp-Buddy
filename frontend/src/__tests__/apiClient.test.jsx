@@ -182,6 +182,46 @@ describe('api client', () => {
     }
   })
 
+  // SSE keep-alives arrive as a `data:` frame with an empty payload. They must not
+  // invoke onChunk or lengthen the transcript, and must not end the stream either.
+  it('ignores data frames with an empty payload', async () => {
+    const encoder = new TextEncoder()
+    const chunks = [
+      'data: hello\n\n',
+      'data: \n\n',
+      'data: world\n\n',
+      'event: done\ndata: [DONE]\n\n',
+    ]
+    const mockRead = vi.fn()
+      .mockResolvedValueOnce({ done: false, value: encoder.encode(chunks[0]) })
+      .mockResolvedValueOnce({ done: false, value: encoder.encode(chunks[1]) })
+      .mockResolvedValueOnce({ done: false, value: encoder.encode(chunks[2]) })
+      .mockResolvedValueOnce({ done: false, value: encoder.encode(chunks[3]) })
+      .mockResolvedValueOnce({ done: true, value: undefined })
+
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: { get: () => 'text/event-stream' },
+      body: { getReader: () => ({ read: mockRead }) },
+    })
+
+    const originalFetch = global.fetch
+    global.fetch = fetchMock
+    const seenChunks = []
+
+    try {
+      const result = await sendChatMessageStream([{ role: 'user', content: 'hi' }], {
+        onChunk: (chunk) => seenChunks.push(chunk),
+      })
+
+      expect(seenChunks).toEqual(['hello', 'world'])
+      expect(result).toBe('helloworld')
+    } finally {
+      global.fetch = originalFetch
+    }
+  })
+
   it('surfaces backend detail message for non-OK stream responses', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: false,
