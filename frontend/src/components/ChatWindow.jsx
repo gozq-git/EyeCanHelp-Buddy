@@ -126,7 +126,11 @@ export default function ChatWindow({ onBack, language = 'en' }) {
   const bottomRef = useRef(null)
   const topRef = useRef(null)
   const streamAbortRef = useRef(null)
-  const generalEnquirySessionIdRef = useRef(`ge-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`)
+  // crypto.randomUUID() rather than Math.random(): this id is sent to the backend as
+  // sessionId, so it identifies a conversation and must not be guessable (Sonar
+  // javascript:S2245). Available in any secure context — CloudFront serves the app over
+  // HTTPS and dev runs on localhost. The timestamp stays for readability in logs.
+  const generalEnquirySessionIdRef = useRef(`ge-${Date.now()}-${crypto.randomUUID()}`)
   const tr = getCopy(language)
   const paymentOptionsLocalized = PAYMENT_OPTIONS.map((option) => ({
     value: option.value,
