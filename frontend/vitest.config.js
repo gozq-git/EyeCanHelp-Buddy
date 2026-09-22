@@ -7,6 +7,12 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: ['./src/__tests__/setup.js'],
+    // vitest's 5s default is measured per test but competes with every other file's
+    // jsdom environment running in parallel. AcknowledgementForm's submit test needs
+    // ~1.5s alone and still timed out in a full-suite run here; CI runners have fewer
+    // cores, so 5s flakes there too — and a failed frontend-tests job skips the Sonar
+    // scan through `needs`. This ceiling only applies to hangs, not to passing tests.
+    testTimeout: 20000,
     coverage: {
       provider: 'v8',
       // Written to the shared artifact folder so the reports container can serve it.
