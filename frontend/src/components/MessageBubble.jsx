@@ -123,6 +123,51 @@ const APPOINTMENT_TEXT = {
   },
 }
 
+// Keyed by language instead of the chained ternaries this replaces (Sonar
+// javascript:S3358). English shows the bare code; every other locale appends its own
+// gloss. NOTE: the fallback is `ta`, not `en`, because the ternary tail it replaces
+// was the Tamil arm. Unreachable in practice — these are the only four locales
+// COPY defines — but preserved rather than silently changed.
+const PERIOD_LABELS = {
+  en: { AM: 'AM', PM: 'PM' },
+  zh: { AM: 'AM (上午)', PM: 'PM (下午)' },
+  ms: { AM: 'AM (Pagi)', PM: 'PM (Petang)' },
+  ta: { AM: 'AM (காலை)', PM: 'PM (மாலை)' },
+}
+
+// Hoisted out of MessageBubble's render (Sonar javascript:S6478). These renderers
+// only ever use `children`, so they close over nothing — defining them per render
+// just handed ReactMarkdown a new component identity each time, remounting the
+// subtree for no reason.
+const MARKDOWN_COMPONENTS = {
+  p: ({ children }) => <p style={{ margin: '0 0 8px' }}>{children}</p>,
+  h2: ({ children }) => <h2 style={{ margin: '0 0 8px', fontSize: '18px' }}>{children}</h2>,
+  h3: ({ children }) => <h3 style={{ margin: '0 0 8px', fontSize: '16px' }}>{children}</h3>,
+  ul: ({ children }) => <ul style={{ margin: '0 0 8px', paddingLeft: '20px' }}>{children}</ul>,
+  li: ({ children }) => <li style={{ marginBottom: '4px' }}>{children}</li>,
+  blockquote: ({ children }) => (
+    <blockquote style={{ margin: '0', paddingLeft: '10px', borderLeft: '3px solid #D0D0D0' }}>
+      {children}
+    </blockquote>
+  ),
+  table: ({ children }) => (
+    <table style={{ width: '100%', borderCollapse: 'collapse', margin: '8px 0' }}>
+      {children}
+    </table>
+  ),
+  th: ({ children }) => (
+    <th style={{ border: '1px solid #D8D8D8', padding: '6px', textAlign: 'left', background: '#F8F8F8' }}>
+      {children}
+    </th>
+  ),
+  td: ({ children }) => (
+    <td style={{ border: '1px solid #D8D8D8', padding: '6px', verticalAlign: 'top' }}>
+      {children}
+    </td>
+  ),
+  hr: () => <hr style={{ border: 0, borderTop: '1px solid #D8D8D8', margin: '10px 0' }} />,
+}
+
 // 'Return Menu' is redundant on the first welcome bubble (you're already at the
 // menu), so it's only shown on welcome bubbles re-appended later in a session.
 function WelcomeContent({ onQuickReply, includeReturnMenu, language = 'en' }) {
@@ -171,6 +216,7 @@ function WelcomeContent({ onQuickReply, includeReturnMenu, language = 'en' }) {
 }
 
 function AppointmentPickerContent({ onAppointmentSubmit, language = 'en' }) {
+  const periodLabels = PERIOD_LABELS[language] || PERIOD_LABELS.ta
   const controlStyle = {
     width: '100%',
     boxSizing: 'border-box',
@@ -223,8 +269,8 @@ function AppointmentPickerContent({ onAppointmentSubmit, language = 'en' }) {
             style={controlStyle}
           >
             <option value="">{copy.periodPlaceholder}</option>
-            <option value="AM">{language === 'en' ? 'AM' : `AM (${language === 'zh' ? '上午' : language === 'ms' ? 'Pagi' : 'காலை'})`}</option>
-            <option value="PM">{language === 'en' ? 'PM' : `PM (${language === 'zh' ? '下午' : language === 'ms' ? 'Petang' : 'மாலை'})`}</option>
+            <option value="AM">{periodLabels.AM}</option>
+            <option value="PM">{periodLabels.PM}</option>
           </select>
         </label>
         <p style={{ margin: 0, fontSize: '12px', color: '#666' }}>
@@ -343,34 +389,7 @@ export default function MessageBubble({ role, type, content, formData, onQuickRe
       }}>
         <ReactMarkdown
           remarkPlugins={[remarkGfm]}
-          components={{
-            p: ({ children }) => <p style={{ margin: '0 0 8px' }}>{children}</p>,
-            h2: ({ children }) => <h2 style={{ margin: '0 0 8px', fontSize: '18px' }}>{children}</h2>,
-            h3: ({ children }) => <h3 style={{ margin: '0 0 8px', fontSize: '16px' }}>{children}</h3>,
-            ul: ({ children }) => <ul style={{ margin: '0 0 8px', paddingLeft: '20px' }}>{children}</ul>,
-            li: ({ children }) => <li style={{ marginBottom: '4px' }}>{children}</li>,
-            blockquote: ({ children }) => (
-              <blockquote style={{ margin: '0', paddingLeft: '10px', borderLeft: '3px solid #D0D0D0' }}>
-                {children}
-              </blockquote>
-            ),
-            table: ({ children }) => (
-              <table style={{ width: '100%', borderCollapse: 'collapse', margin: '8px 0' }}>
-                {children}
-              </table>
-            ),
-            th: ({ children }) => (
-              <th style={{ border: '1px solid #D8D8D8', padding: '6px', textAlign: 'left', background: '#F8F8F8' }}>
-                {children}
-              </th>
-            ),
-            td: ({ children }) => (
-              <td style={{ border: '1px solid #D8D8D8', padding: '6px', verticalAlign: 'top' }}>
-                {children}
-              </td>
-            ),
-            hr: () => <hr style={{ border: 0, borderTop: '1px solid #D8D8D8', margin: '10px 0' }} />,
-          }}
+          components={MARKDOWN_COMPONENTS}
         >
           {content || ''}
         </ReactMarkdown>

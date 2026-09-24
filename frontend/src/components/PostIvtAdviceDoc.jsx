@@ -7,6 +7,9 @@ const DIAGNOSIS_MAP = {
 }
 
 const EYE_MAP = { OD: 'Right', OS: 'Left', OU: 'Both' }
+// BCP 47 tags for toLocaleDateString, keyed by app language. A lookup rather than
+// the chained ternary it replaces (Sonar javascript:S3358).
+const DATE_LOCALES = { en: 'en-GB', zh: 'zh-SG', ms: 'ms-MY', ta: 'ta-SG' }
 
 const ALL_CONDITIONS = [
   'amd_age_related',
@@ -192,7 +195,7 @@ const MED_OPTIONS = [
 
 const black = '#1a1a1a'
 
-function CB({ checked, label }) {
+function Checkbox({ checked, label }) {
   return (
     <label style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '12px', color: black, pointerEvents: 'none', userSelect: 'none', marginBottom: '6px' }}>
       <input
@@ -212,7 +215,7 @@ export default function PostIvtAdviceDoc({ formData, language = 'en' }) {
   const condition = DIAGNOSIS_MAP[diagnosis] || 'amd_age_related'
   const eye = EYE_MAP[formData?.record_eyes] || null
   const medication = formData?.record_medication || 'Eylea (Aflibercept)'
-  const locale = language === 'zh' ? 'zh-SG' : language === 'ms' ? 'ms-MY' : language === 'ta' ? 'ta-SG' : 'en-GB'
+  const locale = DATE_LOCALES[language] || DATE_LOCALES.en
   const date = formData?.issued
     ? new Date(formData.issued).toLocaleDateString(locale, { day: '2-digit', month: 'long', year: 'numeric' })
     : new Date().toLocaleDateString(locale, { day: '2-digit', month: 'long', year: 'numeric' })
@@ -257,7 +260,7 @@ export default function PostIvtAdviceDoc({ formData, language = 'en' }) {
         <div style={{ marginBottom: '8px' }}>{copy.youHave}</div>
         <div style={{ paddingLeft: '40px' }}>
           {ALL_CONDITIONS.map(c => (
-            <CB key={c} checked={c === condition} label={copy.conditions[c] || c} />
+            <Checkbox key={c} checked={c === condition} label={copy.conditions[c] || c} />
           ))}
         </div>
       </div>

@@ -26,7 +26,7 @@ export const sendChatMessage = (messages, options = {}) => {
 }
 
 const parseSseFrame = (frame) => {
-  const normalized = frame.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+  const normalized = frame.replaceAll('\r\n', '\n').replaceAll('\r', '\n')
   const lines = normalized.split('\n')
   let event = 'message'
   const data = []
@@ -74,66 +74,82 @@ const buildErrorMessageFromPayload = (payload) => {
   return ''
 }
 
-export const sendChatMessageStream = async (messages, options = {}) => {
-  const { onChunk, onHeartbeat, signal, sessionId, mode, language, patientId } = options
-  const payload = {
-    messages,
-    ...(sessionId ? { session_id: sessionId } : {}),
-    ...(mode ? { mode } : {}),
-    ...(language ? { language } : {}),
-    ...(patientId ? { patient_id: patientId } : {}),
-  }
-  const response = await fetch('/api/chat?stream=true', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Accept: 'text/event-stream',
-    },
-    body: JSON.stringify(payload),
-    signal,
-  })
+const buildStreamPayload = (messages, { sessionId, mode, language, patientId }) => ({
+  messages,
+  ...(sessionId ? { session_id: sessionId } : {}),
+  ...(mode ? { mode } : {}),
+  ...(language ? { language } : {}),
+  ...(patientId ? { patient_id: patientId } : {}),
+})
 
-  if (!response.ok) {
-    const contentType = response.headers.get('content-type') || ''
-    let message = ''
-    try {
-      if (contentType.includes('application/json')) {
-        message = buildErrorMessageFromPayload(await response.json())
-      } else {
-        const text = await response.text()
-        try {
-          message = buildErrorMessageFromPayload(JSON.parse(text)) || text.trim()
-        } catch {
-          message = text.trim()
-        }
-      }
-    } catch {
-      message = ''
+// Best effort: a failed stream may answer with JSON, with JSON mislabelled as text, or
+// with nothing usable at all. Every parse failure degrades to '' so the caller can fall
+// back to the status code rather than surfacing a parser error.
+const readErrorMessage = async (response) => {
+  const contentType = response.headers.get('content-type') || ''
+  try {
+    if (contentType.includes('application/json')) {
+      return buildErrorMessageFromPayload(await response.json())
     }
+    const text = await response.text()
+    try {
+      return buildErrorMessageFromPayload(JSON.parse(text)) || text.trim()
+    } catch {
+      return text.trim()
+    }
+  } catch {
+    return ''
+  }
+}
 
+// Throws unless the response is a readable event stream. Splitting the three guards out
+// of the transport keeps sendChatMessageStream flat (Sonar javascript:S3776).
+const assertStreamable = async (response) => {
+  if (!response.ok) {
+    const message = await readErrorMessage(response)
     const error = new Error(message || `Streaming request failed: ${response.status}`)
     error.status = response.status
     throw error
   }
-
   const contentType = response.headers.get('content-type') || ''
   if (!contentType.includes('text/event-stream')) {
     throw new Error(`Unexpected streaming content-type: ${contentType || 'unknown'}`)
   }
-
   if (!response.body) {
     throw new Error('Streaming response body is unavailable')
   }
+}
 
+// One frame in, one decision out: `done` ends the stream, `text` is appended to the
+// running transcript. Heartbeats and empty data frames contribute no text.
+const handleStreamFrame = ({ event, data }, { onChunk, onHeartbeat }) => {
+  if (event === 'done' || data === '[DONE]') {
+    return { done: true, text: '' }
+  }
+  if (event === 'error') {
+    throw new Error(data || 'Streaming request failed')
+  }
+  if (event === 'heartbeat') {
+    onHeartbeat?.(data || 'ping')
+    return { done: false, text: '' }
+  }
+  if (data) {
+    onChunk?.(data)
+    return { done: false, text: data }
+  }
+  return { done: false, text: '' }
+}
+
+const consumeSseStream = async (response, { onChunk, onHeartbeat }) => {
   const reader = response.body.getReader()
   const decoder = new TextDecoder('utf-8')
   let buffer = ''
   let fullText = ''
 
-  while (true) {
+  for (;;) {
     const { value, done } = await reader.read()
     if (done) {
-      break
+      return fullText
     }
 
     buffer += decoder.decode(value, { stream: true })
@@ -141,36 +157,29 @@ export const sendChatMessageStream = async (messages, options = {}) => {
     while (boundary !== -1) {
       const frame = buffer.slice(0, boundary)
       buffer = buffer.slice(boundary + frameSeparatorLength(buffer, boundary))
-      const { event, data } = parseSseFrame(frame)
-
-      if (event === 'done' || data === '[DONE]') {
+      const { done: finished, text } = handleStreamFrame(parseSseFrame(frame), { onChunk, onHeartbeat })
+      fullText += text
+      if (finished) {
         return fullText
       }
-
-      if (event === 'error') {
-        throw new Error(data || 'Streaming request failed')
-      }
-
-      if (event === 'heartbeat') {
-        if (onHeartbeat) {
-          onHeartbeat(data || 'ping')
-        }
-        boundary = findFrameBoundary(buffer)
-        continue
-      }
-
-      if (data) {
-        fullText += data
-        if (onChunk) {
-          onChunk(data)
-        }
-      }
-
       boundary = findFrameBoundary(buffer)
     }
   }
+}
 
-  return fullText
+export const sendChatMessageStream = async (messages, options = {}) => {
+  const response = await fetch('/api/chat?stream=true', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'text/event-stream',
+    },
+    body: JSON.stringify(buildStreamPayload(messages, options)),
+    signal: options.signal,
+  })
+
+  await assertStreamable(response)
+  return consumeSseStream(response, options)
 }
 
 export const simulateSingpassLogin = () =>

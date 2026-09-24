@@ -47,7 +47,7 @@ describe('FinancialCounsellingDoc', () => {
     expect(screen.getByText('Others')).toBeInTheDocument()
   })
 
-  // CB renders <span><input/><span>LABEL</span></span>; the input is a sibling of the label span.
+  // Checkbox renders <span><input/><span>LABEL</span></span>; the input is a sibling of the label span.
   const checkboxFor = (labelText) => screen.getByText(labelText).parentElement.querySelector('input[type="checkbox"]')
 
   it('checks the drug option matching the supplied medication (Lucentis)', () => {
