@@ -84,6 +84,49 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: Apply CloudFront security headers policy
+        shell: bash
+        run: |
+          POLICY_NAME="EyeCanHelpBuddySecurityHeaders"
+          POLICY_ID=$(aws cloudfront list-response-headers-policies \
+            --type custom \
+            --query "ResponseHeadersPolicyList.Items[?ResponseHeadersPolicy.ResponseHeadersPolicyConfig.Name=='$POLICY_NAME'].ResponseHeadersPolicy.Id | [0]" \
+            --output text)
+
+          if [ "$POLICY_ID" = "None" ] || [ -z "$POLICY_ID" ]; then
+            POLICY_ID=$(aws cloudfront create-response-headers-policy \
+              --response-headers-policy-config file://frontend/cloudfront-response-headers-policy.json \
+              --query 'ResponseHeadersPolicy.Id' \
+              --output text)
+          else
+            POLICY_ETAG=$(aws cloudfront get-response-headers-policy \
+              --id "$POLICY_ID" \
+              --query ETag \
+              --output text)
+            aws cloudfront update-response-headers-policy \
+              --id "$POLICY_ID" \
+              --if-match "$POLICY_ETAG" \
+              --response-headers-policy-config file://frontend/cloudfront-response-headers-policy.json
+          fi
+
+          aws cloudfront get-distribution-config \
+            --id "$FRONTEND_CLOUDFRONT_DISTRIBUTION_ID" \
+            --output json > /tmp/cloudfront-distribution.json
+          DISTRIBUTION_ETAG=$(jq -r '.ETag' /tmp/cloudfront-distribution.json)
+          CURRENT_POLICY_ID=$(jq -r '.DistributionConfig.DefaultCacheBehavior.ResponseHeadersPolicyId // empty' /tmp/cloudfront-distribution.json)
+          if [ -n "$CURRENT_POLICY_ID" ] && [ "$CURRENT_POLICY_ID" != "$POLICY_ID" ]; then
+            echo "Default cache behavior already uses response headers policy $CURRENT_POLICY_ID. Merge it with $POLICY_ID before deploying."
+            exit 1
+          fi
+          jq --arg policy_id "$POLICY_ID" '
+            .DistributionConfig
+            | .DefaultCacheBehavior.ResponseHeadersPolicyId = $policy_id
+          ' /tmp/cloudfront-distribution.json > /tmp/cloudfront-distribution-config.json
+          aws cloudfront update-distribution \
+            --id "$FRONTEND_CLOUDFRONT_DISTRIBUTION_ID" \
+            --if-match "$DISTRIBUTION_ETAG" \
+            --distribution-config file:///tmp/cloudfront-distribution-config.json
+
       - name: Sync frontend dist to S3
         shell: bash
         run: |

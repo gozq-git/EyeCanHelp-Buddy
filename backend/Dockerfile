@@ -12,10 +12,11 @@ WORKDIR /app
 RUN pip install --no-cache-dir --upgrade "pip==26.2.1"
 
 COPY requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip uninstall -y msgpack setuptools \
+	&& pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
 EXPOSE 8000
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--no-server-header"]
