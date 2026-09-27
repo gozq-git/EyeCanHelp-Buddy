@@ -38,6 +38,21 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(title="EyeCanHelp Buddy Backend", lifespan=lifespan)
 
+
+@app.middleware("http")
+async def add_security_headers(request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
+    response.headers["Cross-Origin-Embedder-Policy"] = "unsafe-none"
+    response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    if request.url.scheme == "https":
+        response.headers["Strict-Transport-Security"] = "max-age=31536000"
+    return response
+
+
 app.include_router(epic_router, prefix="/api")
 app.include_router(acknowledgement_router, prefix="/api")
 app.include_router(chat_router, prefix="/api")
