@@ -311,9 +311,16 @@ jobs:
         shell: bash
         run: |
           docker build \
+            --pull \
+            --no-cache \
             -f backend/Dockerfile \
             -t "$LOCAL_IMAGE" \
             backend
+      - name: Verify fixed Python package versions
+        shell: bash
+        run: |
+          docker run --rm "$LOCAL_IMAGE" python -c \
+            "import msgpack, setuptools; assert msgpack.__version__ == '1.2.1', msgpack.__version__; assert setuptools.__version__ == '83.0.0', setuptools.__version__; print(f'msgpack={msgpack.__version__} setuptools={setuptools.__version__}')"
       - name: Save image tarball
         shell: bash
         run: |
