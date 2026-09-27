@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { AuthProvider } from 'react-oidc-context'
 import App from './App.jsx'
 import AppShell from './AppShell.jsx'
+import './index.css'
 
 const bypassAuth = import.meta.env.VITE_BYPASS_AUTH === 'true'
 
