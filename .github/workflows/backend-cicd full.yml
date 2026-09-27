@@ -91,14 +91,14 @@ jobs:
           set +a
           mkdir -p ../reports/backend
           python -m pytest tests/eval/test_ge_safety.py -m eval -v \
-            --html=../reports/backend/safety-eval-report.html \
+            --html=../reports/backend/ai-eval-report.html \
             --self-contained-html
       - name: Upload DeepEval safety report
         uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: backend-safety-eval-report
-          path: reports/backend/safety-eval-report.html
+          name: backend-ai-eval-report
+          path: reports/backend/ai-eval-report.html
 
   frontend-tests:
     name: Unit test (vitest)
