@@ -50,7 +50,7 @@ export async function mockBackend(page, overrides = {}) {
       estimated_cost_max: 480,
       max_medisave_claimable: 250,
     })),
-    // No prior acknowledgement by default → 404 so the post-op merge is skipped.
+    // No prior acknowledgement by default → 404 so the post-IVT merge is skipped.
     latestAck: (route) => route.fulfill(json({ detail: 'not found' }, 404)),
     submitAck: (route) => route.fulfill(json({
       record: { ...EPIC_RECORD_P001, issued: new Date().toISOString() },

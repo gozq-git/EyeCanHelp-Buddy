@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test'
 import { gotoChat } from './helpers.js'
 
 test.describe('App boot flow', () => {
-  test('splash auto-advances to onboarding, Continue leads to the chat menu', async ({ page }) => {
+  test('splash advances to onboarding and Continue opens the chat menu', async ({ page }) => {
     await page.goto('/')
 
     // Onboarding appears after the 2s splash timer.
@@ -15,7 +15,7 @@ test.describe('App boot flow', () => {
     await expect(page.getByRole('button', { name: 'View Post-IVT Advice Form' })).toBeVisible()
   })
 
-  test('input shows the localized welcome placeholder in welcome mode', async ({ page }) => {
+  test('chat input shows its welcome placeholder on the initial screen', async ({ page }) => {
     await gotoChat(page)
     await expect(page.getByPlaceholder('Write your message…')).toBeVisible()
   })

@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test'
 import { gotoChat, mockBackend } from './helpers.js'
 
 test.describe('General Enquiry flow', () => {
-  test('asks a question and shows the mocked bot reply', async ({ page }) => {
+  test('submits a question and renders the bot reply', async ({ page }) => {
     await mockBackend(page)
     await gotoChat(page)
 
@@ -17,7 +17,7 @@ test.describe('General Enquiry flow', () => {
     await expect(page.getByText('A cataract is a clouding of the eye lens.')).toBeVisible()
   })
 
-  test('shows backend error detail bubble when the chat API fails', async ({ page }) => {
+  test('renders the backend error detail when the chat API returns 500', async ({ page }) => {
     await mockBackend(page, {
       chat: (route) => route.fulfill({ status: 500, contentType: 'application/json', body: '{"detail":"boom"}' }),
     })

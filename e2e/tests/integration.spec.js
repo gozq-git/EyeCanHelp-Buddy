@@ -28,7 +28,7 @@ test.describe('Real backend integration @integration', () => {
     }
   })
 
-  test('General Enquiry returns a real bot reply', async ({ page }) => {
+  test('real backend returns a bot reply for a general enquiry', async ({ page }) => {
     await gotoChat(page)
 
     await page.getByRole('button', { name: 'General Enquiry' }).click()
@@ -50,7 +50,7 @@ test.describe('Real backend integration @integration', () => {
     await expect(replies.last()).not.toHaveText('')
   })
 
-  test('existing patient (P001) logs in via Singpass and is recognised', async ({ page }) => {
+  test('real backend recognises existing patient P001 after Singpass login', async ({ page }) => {
     await gotoChat(page)
 
     await page.getByRole('button', { name: 'View Post-IVT Advice Form' }).click()
