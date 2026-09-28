@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test'
 import { gotoChat, mockBackend } from './helpers.js'
 
 test.describe('General Enquiry flow', () => {
-  test('submits a question and renders the mocked bot reply', async ({ page }) => {
+  test('submits a question and renders the bot reply', async ({ page }) => {
     await mockBackend(page)
     await gotoChat(page)
 
