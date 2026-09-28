@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test'
 import { gotoChat, mockBackend, singpassLogin } from './helpers.js'
 
 test.describe('Pre-procedure acknowledgement flow', () => {
-  test('existing patient completes the form and sees the financial counselling doc', async ({ page }) => {
+  test('existing patient submits pre-procedure answers and sees financial counselling', async ({ page }) => {
     await mockBackend(page)
     await gotoChat(page)
 
@@ -29,7 +29,7 @@ test.describe('Pre-procedure acknowledgement flow', () => {
     await expect(page.getByText('Financial Counselling & Advice', { exact: true })).toBeVisible({ timeout: 10_000 })
   })
 
-  test('shows the Singpass login prompt with a username field before login', async ({ page }) => {
+  test('pre-procedure flow shows the Singpass login prompt before authentication', async ({ page }) => {
     await mockBackend(page)
     await gotoChat(page)
 

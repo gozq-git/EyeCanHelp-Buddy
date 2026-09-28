@@ -1,8 +1,8 @@
 import { test, expect } from '@playwright/test'
 import { gotoChat, mockBackend, singpassLogin } from './helpers.js'
 
-test.describe('Post-operation checklist flow', () => {
-  test('existing patient logs in and sees the post-op checklist document', async ({ page }) => {
+test.describe('Post-IVT checklist flow', () => {
+  test('existing patient opens the post-IVT advice document after Singpass login', async ({ page }) => {
     await mockBackend(page)
     await gotoChat(page)
 
@@ -18,7 +18,7 @@ test.describe('Post-operation checklist flow', () => {
   // The appointment leg of this journey was dropped when the 'Book Appointment'
   // menu option was hidden; the pre-procedure leg still proves the same thing
   // (one login carries across flows after Return Menu).
-  test('single login is reused across flows after returning to menu', async ({ page }) => {
+  test('returning to the menu preserves the patient session across IVT flows', async ({ page }) => {
     await mockBackend(page)
     await gotoChat(page)
 
