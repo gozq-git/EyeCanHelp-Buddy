@@ -446,7 +446,7 @@ jobs:
 
   e2e-tests:
     name: End-to-end (Playwright)
-    needs: push-backend-image-to-ecr
+    needs: push-image-to-AWS
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -473,7 +473,7 @@ jobs:
 
   owasp-zap:
     name: DAST (OWASP ZAP Scan)
-    needs: push-backend-image-to-ecr
+    needs: push-image-to-AWS
     runs-on: ubuntu-latest
 
     steps:
