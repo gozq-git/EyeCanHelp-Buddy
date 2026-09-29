@@ -330,7 +330,7 @@ jobs:
           path: reports/backend/ai-eval-report.html
   
   build-backend-image:
-    name: Build backend Docker image
+    name: Build Docker image
     needs:
       - sonarqube-scan
       - snyk-scan-BE
