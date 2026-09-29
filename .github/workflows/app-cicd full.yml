@@ -398,8 +398,8 @@ jobs:
           name: trivy-report
           path: trivy-report.txt
 
-  push-backend-image-to-ecr:
-    name: Push backend image to AWS ECR
+  push-image-to-AWS:
+    name: Push image & deploy AWS
     needs: trivy-image-scan
     runs-on: ubuntu-latest
     env:
