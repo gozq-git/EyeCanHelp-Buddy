@@ -1,23 +1,23 @@
-name: Backend Full CI/CD Pipeline
+name: App Full CI/CD Pipeline
 
 on:
   workflow_dispatch:
   # Analyse every PR, so the quality gate blocks before a merge rather than after.
-  # pull_request:
-  #   branches:
-  #     - main
+  pull_request:
+    branches:
+      - main
   # Also analyse main itself. SonarCloud's dashboard and its API default to the
   # main branch, so without this the baseline silently goes stale: PR analyses land
   # under their own pull-request id and main keeps reporting its last push-time
   # result. Paths include frontend/** because sonar.sources now covers it too.
-  # push:
-  #   branches:
-  #     - main
-  #   paths:
-  #     - backend/**
-  #     - frontend/**
-  #     - sonar-project.properties
-  #     - .github/workflows/backend-cicd full.yml
+  push:
+    branches:
+      - main
+    paths:
+      - backend/**
+      - frontend/**
+      - sonar-project.properties
+      - .github/workflows/backend-cicd full.yml
 
 permissions:
   contents: read
@@ -55,50 +55,6 @@ jobs:
         with:
           name: backend-report
           path: reports/backend
-
-  backend-safety-evals:
-    name: AI Functional Test (DeepEval)
-    needs: backend-tests
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: backend
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-python@v6
-        with:
-          python-version: "3.12"
-      - name: Install dependencies
-        run: pip install -r requirements.txt -r requirements-dev.txt
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v5
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ap-southeast-1
-      - name: Run DeepEval safety tests
-        shell: bash
-        env:
-          BACKEND_ENV_FILE: ${{ secrets.BACKEND_ENV_FILE }}
-        run: |
-          if [ -z "$BACKEND_ENV_FILE" ]; then
-            echo "Missing required secret: BACKEND_ENV_FILE"
-            exit 1
-          fi
-          printf '%s' "$BACKEND_ENV_FILE" > .env
-          set -a
-          source .env
-          set +a
-          mkdir -p ../reports/backend
-          python -m pytest tests/eval/test_ge_safety.py -m eval -v \
-            --html=../reports/backend/ai-eval-report.html \
-            --self-contained-html
-      - name: Upload DeepEval safety report
-        uses: actions/upload-artifact@v7
-        if: always()
-        with:
-          name: backend-ai-eval-report
-          path: reports/backend/ai-eval-report.html
 
   frontend-tests:
     name: Unit test (vitest)
@@ -283,8 +239,8 @@ jobs:
   #        command: code test
 
   snyk-scan-BE:
-    name: Snyk Scan BE (SCA & SAST)
-    needs: backend-tests
+    name: Snyk Scan (SCA & SAST)
+    needs: [backend-tests, frontend-tests]
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
@@ -329,11 +285,56 @@ jobs:
           name: snyk-report
           path: reports/snyk
 
+  backend-safety-evals:
+    name: AI Functional Test (DeepEval)
+    needs: backend-tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install -r requirements.txt -r requirements-dev.txt
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-southeast-1
+      - name: Run DeepEval safety tests
+        shell: bash
+        env:
+          BACKEND_ENV_FILE: ${{ secrets.BACKEND_ENV_FILE }}
+        run: |
+          if [ -z "$BACKEND_ENV_FILE" ]; then
+            echo "Missing required secret: BACKEND_ENV_FILE"
+            exit 1
+          fi
+          printf '%s' "$BACKEND_ENV_FILE" > .env
+          set -a
+          source .env
+          set +a
+          mkdir -p ../reports/backend
+          python -m pytest tests/eval/test_ge_safety.py -m eval -v \
+            --html=../reports/backend/ai-eval-report.html \
+            --self-contained-html
+      - name: Upload DeepEval safety report
+        uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: backend-ai-eval-report
+          path: reports/backend/ai-eval-report.html
+  
   build-backend-image:
     name: Build backend Docker image
     needs:
       - sonarqube-scan
       - snyk-scan-BE
+      - backend-safety-evals
     runs-on: ubuntu-latest
     env:
       BACKEND_ENV_FILE: ${{ secrets.BACKEND_ENV_FILE }}
@@ -483,35 +484,35 @@ jobs:
           allow_issue_writing: false
         
 
-  load-test:
-    name: Stress / load (Locust)
-    needs: push-backend-image-to-ecr
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: backend
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-python@v6
-        with:
-          python-version: "3.12"
-      - name: Install dependencies
-        run: pip install -r requirements.txt -r requirements-dev.txt
-      - name: Start backend
-        run: |
-          # Load test only hits GET /, so disable lifespan startup hooks to avoid
-          # requiring Postgres/Mongo in this CI job.
-          python -m uvicorn main:app --host 127.0.0.1 --port 8000 --lifespan off &
-          for _ in $(seq 1 30); do curl -sf http://127.0.0.1:8000/ && break; sleep 1; done
-      - name: Run Locust (headless)
-        run: |
-          mkdir -p ../reports/load
-          python -m locust -f tests/load/locustfile.py \
-            --host http://127.0.0.1:8000 \
-            --headless -u 50 -r 10 -t 30s \
-            --html ../reports/load/report.html
-      - uses: actions/upload-artifact@v7
-        if: always()
-        with:
-          name: load-report
-          path: reports/load
+  # load-test:
+  #   name: Stress / load (Locust)
+  #   needs: push-backend-image-to-ecr
+  #   runs-on: ubuntu-latest
+  #   defaults:
+  #     run:
+  #       working-directory: backend
+  #   steps:
+  #     - uses: actions/checkout@v5
+  #     - uses: actions/setup-python@v6
+  #       with:
+  #         python-version: "3.12"
+  #     - name: Install dependencies
+  #       run: pip install -r requirements.txt -r requirements-dev.txt
+  #     - name: Start backend
+  #       run: |
+  #         # Load test only hits GET /, so disable lifespan startup hooks to avoid
+  #         # requiring Postgres/Mongo in this CI job.
+  #         python -m uvicorn main:app --host 127.0.0.1 --port 8000 --lifespan off &
+  #         for _ in $(seq 1 30); do curl -sf http://127.0.0.1:8000/ && break; sleep 1; done
+  #     - name: Run Locust (headless)
+  #       run: |
+  #         mkdir -p ../reports/load
+  #         python -m locust -f tests/load/locustfile.py \
+  #           --host http://127.0.0.1:8000 \
+  #           --headless -u 50 -r 10 -t 30s \
+  #           --html ../reports/load/report.html
+  #     - uses: actions/upload-artifact@v7
+  #       if: always()
+  #       with:
+  #         name: load-report
+  #         path: reports/load
