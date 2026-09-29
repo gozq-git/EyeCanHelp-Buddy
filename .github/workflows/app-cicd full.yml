@@ -99,7 +99,7 @@ jobs:
           path: reports/frontend/coverage/lcov.info
 
   sonarqube-scan:
-    name: SonarQube Scan (Code Quality)
+    name: Code Quality (SonarQube)
     needs: [backend-tests, frontend-tests]
     runs-on: ubuntu-latest
     continue-on-error: true
@@ -239,7 +239,7 @@ jobs:
   #        command: code test
 
   snyk-scan-BE:
-    name: Snyk Scan (SCA & SAST)
+    name: SCA & SAST (Snyk)
     needs: [backend-tests, frontend-tests]
     runs-on: ubuntu-latest
     continue-on-error: true
