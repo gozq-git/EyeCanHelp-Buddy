@@ -212,6 +212,35 @@ def test_chat_stream_returns_sse_frames(client, monkeypatch):
     assert "data: [DONE]" in body
 
 
+def test_chat_stream_passes_the_conversation_session_id(client, monkeypatch):
+    seen = []
+
+    async def fake_chat_stream(messages, language=None, session_id=None):
+        seen.append(session_id)
+        yield "ok"
+
+    monkeypatch.setattr("services.chatbot.router.chat_stream", fake_chat_stream)
+    monkeypatch.setattr(
+        "services.chatbot.router.apply_guardrail_to_messages",
+        lambda messages: asyncio.sleep(0, result={"blocked": False, "message": ""}),
+    )
+
+    session_id = "3f2a9c1e-7b4d-4e8a-9f61-2c5d8e0b7a13"
+    for question in ("What is IVT?", "Does it hurt?"):
+        with client.stream(
+            "POST",
+            "/api/chat?stream=true",
+            json={
+                "messages": [{"role": "user", "content": question}],
+                "session_id": session_id,
+            },
+        ) as resp:
+            assert resp.status_code == 200
+            "".join(resp.iter_text())
+
+    assert seen == [session_id, session_id]
+
+
 def test_chat_stream_emits_heartbeat_events(client, monkeypatch):
     async def fake_chat_stream(messages):
         assert isinstance(messages, list)

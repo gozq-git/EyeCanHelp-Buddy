@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import re
 import uuid
 from collections.abc import AsyncIterator
 
@@ -17,6 +18,11 @@ SSE_DATA_PREFIX = "data: "
 
 # Keys a JSON coordinator response may carry the reply text under, in priority order.
 JSON_TEXT_KEYS = ("response", "result", "output")
+
+# AgentCore rejects runtimeSessionId values outside 33-100 characters. Each distinct id
+# gets its own microVM, which stays alive until it idles out, so ids must be reused per
+# conversation rather than minted per request.
+RUNTIME_SESSION_ID_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{32,99}")
 
 
 def _latest_user_content(messages: list[dict]) -> str:
@@ -293,13 +299,25 @@ async def _stream_runtime_response(response: dict) -> AsyncIterator[str]:
             yield piece
 
 
-async def _invoke_with_runtime_arn_response(prompt: str, stream: bool = False) -> dict | None:
+def _resolve_runtime_session_id(session_id: str | None) -> str:
+    """Pick the AgentCore session id: the conversation's, else the env override, else new."""
+    candidate = (session_id or "").strip()
+    if RUNTIME_SESSION_ID_PATTERN.fullmatch(candidate):
+        return candidate
+    return os.getenv("AGENTCORE_RUNTIME_SESSION_ID", "").strip() or str(uuid.uuid4())
+
+
+async def _invoke_with_runtime_arn_response(
+    prompt: str,
+    stream: bool = False,
+    session_id: str | None = None,
+) -> dict | None:
     runtime_arn = os.getenv("AGENTCORE_COORDINATOR_RUNTIME_ARN", "").strip()
     if not runtime_arn:
         return None
 
     region = os.getenv("AWS_REGION", "").strip() or _extract_region_from_arn(runtime_arn)
-    session_id = os.getenv("AGENTCORE_RUNTIME_SESSION_ID", "").strip() or str(uuid.uuid4())
+    session_id = _resolve_runtime_session_id(session_id)
     payload = json.dumps({"prompt": prompt, "stream": stream}).encode("utf-8")
     request_content_type = os.getenv("AGENTCORE_REQUEST_CONTENT_TYPE", CONTENT_TYPE_JSON)
     response_accept = os.getenv("AGENTCORE_RESPONSE_ACCEPT", CONTENT_TYPE_SSE)
@@ -316,8 +334,8 @@ async def _invoke_with_runtime_arn_response(prompt: str, stream: bool = False) -
     return response
 
 
-async def _invoke_with_runtime_arn(prompt: str) -> str:
-    response = await _invoke_with_runtime_arn_response(prompt, stream=False)
+async def _invoke_with_runtime_arn(prompt: str, session_id: str | None = None) -> str:
+    response = await _invoke_with_runtime_arn_response(prompt, stream=False, session_id=session_id)
     if not response:
         return ""
     return _extract_runtime_response(response)
@@ -334,10 +352,14 @@ async def _invoke_with_http_endpoint(prompt: str) -> str:
     return _extract_text(response.headers.get("content-type", ""), response.text).strip()
 
 
-async def chat(messages: list[dict], language: str | None = None) -> str:
+async def chat(
+    messages: list[dict],
+    language: str | None = None,
+    session_id: str | None = None,
+) -> str:
     prompt = _build_prompt(messages, language=language)
 
-    text = await _invoke_with_runtime_arn(prompt)
+    text = await _invoke_with_runtime_arn(prompt, session_id=session_id)
     if not text:
         text = await _invoke_with_http_endpoint(prompt)
 
@@ -346,10 +368,14 @@ async def chat(messages: list[dict], language: str | None = None) -> str:
     return text
 
 
-async def chat_stream(messages: list[dict], language: str | None = None) -> AsyncIterator[str]:
+async def chat_stream(
+    messages: list[dict],
+    language: str | None = None,
+    session_id: str | None = None,
+) -> AsyncIterator[str]:
     prompt = _build_prompt(messages, language=language)
 
-    response = await _invoke_with_runtime_arn_response(prompt, stream=True)
+    response = await _invoke_with_runtime_arn_response(prompt, stream=True, session_id=session_id)
     if not response:
         return
 
