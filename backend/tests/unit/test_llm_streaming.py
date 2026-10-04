@@ -262,6 +262,50 @@ async def test_invoke_with_runtime_arn_generates_a_session_id(monkeypatch, fake_
     assert client.calls[0]["runtimeSessionId"]
 
 
+CONVERSATION_ID = "3f2a9c1e-7b4d-4e8a-9f61-2c5d8e0b7a13"
+
+
+async def test_invoke_with_runtime_arn_reuses_the_conversation_session_id(
+    monkeypatch, fake_agentcore
+):
+    monkeypatch.setenv(
+        "AGENTCORE_COORDINATOR_RUNTIME_ARN",
+        "arn:aws:bedrock-agentcore:us-east-1:123456789012:runtime/test",
+    )
+    monkeypatch.setenv("AGENTCORE_RUNTIME_SESSION_ID", "env-session-id-that-should-lose-000000")
+    client = fake_agentcore({})
+
+    await llm._invoke_with_runtime_arn_response("first", session_id=CONVERSATION_ID)
+    await llm._invoke_with_runtime_arn_response("second", session_id=CONVERSATION_ID)
+
+    assert [call["runtimeSessionId"] for call in client.calls] == [CONVERSATION_ID] * 2
+
+
+@pytest.mark.parametrize("session_id", [None, "", "too-short", "x" * 101, "bad id with spaces " * 3])
+def test_resolve_runtime_session_id_replaces_ids_agentcore_would_reject(monkeypatch, session_id):
+    monkeypatch.delenv("AGENTCORE_RUNTIME_SESSION_ID", raising=False)
+
+    resolved = llm._resolve_runtime_session_id(session_id)
+
+    assert resolved != session_id
+    assert llm.RUNTIME_SESSION_ID_PATTERN.fullmatch(resolved)
+
+
+async def test_chat_stream_forwards_the_session_id(monkeypatch):
+    seen = {}
+
+    async def fake_response(prompt, stream=False, session_id=None):
+        seen["session_id"] = session_id
+        return None
+
+    monkeypatch.setattr(llm, "_invoke_with_runtime_arn_response", fake_response)
+
+    async for _ in llm.chat_stream([{"role": "user", "content": "hi"}], session_id=CONVERSATION_ID):
+        pass
+
+    assert seen["session_id"] == CONVERSATION_ID
+
+
 async def test_invoke_with_runtime_arn_returns_empty_without_a_response(monkeypatch):
     monkeypatch.delenv("AGENTCORE_COORDINATOR_RUNTIME_ARN", raising=False)
 
@@ -285,7 +329,7 @@ async def test_invoke_with_runtime_arn_extracts_the_reply(monkeypatch, fake_agen
 
 # ── chat / chat_stream ────────────────────────────────────────────────────────
 async def test_chat_falls_back_to_http_endpoint(monkeypatch):
-    async def _no_runtime(_prompt):
+    async def _no_runtime(_prompt, session_id=None):
         return ""
 
     async def _http(_prompt):
@@ -298,7 +342,7 @@ async def test_chat_falls_back_to_http_endpoint(monkeypatch):
 
 
 async def test_chat_reports_when_both_paths_are_silent(monkeypatch):
-    async def _empty(_prompt):
+    async def _empty(_prompt, session_id=None):
         return ""
 
     monkeypatch.setattr(llm, "_invoke_with_runtime_arn", _empty)
@@ -308,7 +352,7 @@ async def test_chat_reports_when_both_paths_are_silent(monkeypatch):
 
 
 async def test_chat_stream_yields_nothing_without_a_runtime(monkeypatch):
-    async def _none(_prompt, stream=False):
+    async def _none(_prompt, stream=False, session_id=None):
         return None
 
     monkeypatch.setattr(llm, "_invoke_with_runtime_arn_response", _none)
@@ -317,7 +361,7 @@ async def test_chat_stream_yields_nothing_without_a_runtime(monkeypatch):
 
 
 async def test_chat_stream_yields_runtime_chunks(monkeypatch):
-    async def _response(_prompt, stream=False):
+    async def _response(_prompt, stream=False, session_id=None):
         return {
             "contentType": llm.CONTENT_TYPE_SSE,
             "response": _FakeStreamingBody(lines=[b'data: "A "', b'data: "cataract"']),

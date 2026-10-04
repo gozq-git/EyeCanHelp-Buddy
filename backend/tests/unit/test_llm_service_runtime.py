@@ -192,7 +192,7 @@ async def test_apply_guardrail_to_messages_raises_on_client_error(monkeypatch):
 async def test_chat_builds_prompt_and_uses_runtime(monkeypatch):
     called = {"prompt": None}
 
-    async def _fake_invoke(prompt):
+    async def _fake_invoke(prompt, session_id=None):
         called["prompt"] = prompt
         return "agent response"
 
@@ -245,7 +245,7 @@ async def test_chat_stream_yields_runtime_chunks(monkeypatch):
             yield b"data: hello"
             yield b"data: world"
 
-    async def _fake_runtime_response(prompt, stream=False):
+    async def _fake_runtime_response(prompt, stream=False, session_id=None):
         assert prompt == "USER: Hi"
         assert stream is True
         return {
