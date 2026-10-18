@@ -1002,13 +1002,13 @@ export default function ChatWindow({ onBack, language = 'en' }) {
     setInput('')
 
     if (regStep) {
-      handleRegistration(rawText)
+      await handleRegistration(rawText)
       return
     }
 
     if (mode === 'pre_procedure') {
       if (preProcStep !== 'login' && preProcStep !== 'complete') {
-        handlePreProcAnswer(rawText)
+        await handlePreProcAnswer(rawText)
       }
       return
     }
@@ -1139,7 +1139,7 @@ export default function ChatWindow({ onBack, language = 'en' }) {
           <input
             value={input}
             onChange={e => setInput(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleSend() } }}
+            onKeyDown={async e => { if (e.key === 'Enter') { e.preventDefault(); await handleSend() } }}
             placeholder={placeholder}
             disabled={inputDisabled}
             style={{
